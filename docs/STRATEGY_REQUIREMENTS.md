@@ -120,13 +120,28 @@ The strategy is based on Elliott Wave concepts, specifically:
 
 ---
 
-## Round 4: Filters & Context (TO BE COMPLETED)
+## Round 4: Filters & Context ✅ COMPLETED
 
-### Questions Planned:
-- Market condition filters
-- Session preferences
-- Time-based restrictions
-- Risk management rules
+### Strategic Approach: Broad Testing Framework
+
+#### Market Condition Filters ✅
+**Q: What market condition filters do you want to use?**
+**A: START BROAD, TEST EVERYTHING. Build flexible filter framework where all filters are optional/configurable for optimization testing:**
+- Volatility filters (min/max ATR ranges)
+- Trend strength filters
+- Market regime detection
+- All parameters testable to find optimal combinations
+
+#### Session Preferences ✅
+**Q: Do you prefer specific trading sessions?**
+**A: CONFIGURABLE for testing. Build capability to enable/disable sessions (London, New York, Asian) and test which combinations provide best results.**
+
+#### News Event Filters ✅
+**Q: How do you handle news events?**
+**A: CONFIGURABLE for testing. Build capability to avoid trading around news events with configurable time buffers, then test if filtering improves performance.**
+
+#### Testing Philosophy ✅
+**Rather than pre-defining filters, build comprehensive testing framework to let data determine optimal filter combinations. This avoids premature filtering that might eliminate profitable opportunities.**
 
 ---
 
@@ -153,6 +168,8 @@ The strategy is based on Elliott Wave concepts, specifically:
 - **Signal Bar Stop Losses**: 2-pip buffer below/above signal bar (+ spread for shorts)
 - **Percentage Position Sizing**: Configurable risk percentage per trade
 - **Extension Target Management**: Multiple configurable take profit levels
+- **Flexible Filter Framework**: All market filters optional/configurable for testing optimization
+- **Comprehensive Testing Engine**: Support A/B testing of filter combinations and parameter sets
 
 ---
 
@@ -195,9 +212,10 @@ dominant_swing:
 - [x] Round 1: Core Mechanics - **COMPLETED** ✅
 - [x] Round 2: Fibonacci Application - **COMPLETED** ✅ 
 - [x] Round 3: Trade Management - **COMPLETED** ✅
-- [ ] Round 4: Filters & Context - Pending
-- [ ] Configuration Parameters - In Progress
-- [ ] Implementation Specifications - In Progress
+- [x] Round 4: Filters & Context - **COMPLETED** ✅
+- [x] **STRATEGY REQUIREMENTS COMPLETE** 🎉
+- [ ] Configuration Parameters - Ready to populate
+- [ ] Implementation Specifications - Ready to begin
 
 ---
 
