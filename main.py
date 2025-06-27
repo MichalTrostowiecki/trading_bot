@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Optional
 import uvicorn
 
-from src.utils.config import load_config, get_config
+from src.utils.config import ConfigManager, get_config
 from src.data.mt5_interface import MT5Interface, initialize_mt5_interface
 from src.execution.trading_engine import initialize_trading_engine, get_trading_engine
 from src.monitoring.web_dashboard import app as dashboard_app
@@ -42,16 +42,16 @@ class TradingBotApplication:
             # Load configuration first
             logger.info("Loading configuration...")
             try:
-                load_config("development")  # Load development config
-                config = get_config()
+                config_manager = ConfigManager()
+                config = config_manager.load_config("development")
                 logger.info(f"Configuration loaded for environment: {config.environment}")
             except Exception as e:
                 logger.error(f"Failed to load configuration: {e}")
                 logger.info("Creating default configuration...")
                 # Create a minimal default config if file doesn't exist
                 self._create_default_config()
-                load_config("development")
-                config = get_config()
+                config_manager = ConfigManager()
+                config = config_manager.load_config("development")
             
             # Initialize database
             logger.info("Initializing database...")
@@ -199,7 +199,14 @@ class TradingBotApplication:
         """Create a default configuration file."""
         try:
             from pathlib import Path
-            import yaml
+            try:
+                import yaml
+            except ImportError:
+                logger.error("PyYAML not installed. Installing...")
+                import subprocess
+                import sys
+                subprocess.run([sys.executable, "-m", "pip", "install", "pyyaml>=6.0"], check=True)
+                import yaml
             
             config_dir = Path("config")
             config_dir.mkdir(exist_ok=True)
