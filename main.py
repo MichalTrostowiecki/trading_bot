@@ -10,11 +10,11 @@ from datetime import datetime
 from typing import Optional
 import uvicorn
 
+from src.utils.config import load_config, get_config
 from src.data.mt5_interface import MT5Interface, initialize_mt5_interface
 from src.execution.trading_engine import initialize_trading_engine, get_trading_engine
 from src.monitoring.web_dashboard import app as dashboard_app
 from src.data.database import initialize_database, get_database_manager
-from src.utils.config import config
 from src.monitoring import get_logger
 
 logger = get_logger("main")
@@ -38,6 +38,20 @@ class TradingBotApplication:
         """Initialize all system components."""
         try:
             logger.info("Initializing Fibonacci Trading Bot...")
+            
+            # Load configuration first
+            logger.info("Loading configuration...")
+            try:
+                load_config("development")  # Load development config
+                config = get_config()
+                logger.info(f"Configuration loaded for environment: {config.environment}")
+            except Exception as e:
+                logger.error(f"Failed to load configuration: {e}")
+                logger.info("Creating default configuration...")
+                # Create a minimal default config if file doesn't exist
+                self._create_default_config()
+                load_config("development")
+                config = get_config()
             
             # Initialize database
             logger.info("Initializing database...")
@@ -104,6 +118,7 @@ class TradingBotApplication:
             )
             
             logger.info(f"🚀 Fibonacci Trading Bot started successfully!")
+            config = get_config()
             logger.info(f"📊 Dashboard available at: http://{config.api.host}:{config.api.port}")
             logger.info(f"🔧 Use the dashboard to control trading operations")
             
@@ -119,6 +134,7 @@ class TradingBotApplication:
     async def _start_dashboard_server(self):
         """Start the web dashboard server."""
         try:
+            config = get_config()
             dashboard_config = uvicorn.Config(
                 app=dashboard_app,
                 host=config.api.host,
@@ -178,6 +194,72 @@ class TradingBotApplication:
         
         # Exit after a brief delay to allow cleanup
         asyncio.get_event_loop().call_later(5.0, sys.exit, 0)
+    
+    def _create_default_config(self):
+        """Create a default configuration file."""
+        try:
+            from pathlib import Path
+            import yaml
+            
+            config_dir = Path("config")
+            config_dir.mkdir(exist_ok=True)
+            
+            default_config = {
+                "environment": "development",
+                "mt5": {
+                    "server": "Demo-Server",
+                    "login": 12345678,
+                    "password": "demo_password",
+                    "timeout": 10000
+                },
+                "data": {
+                    "symbols": ["EURUSD", "GBPUSD"],
+                    "timeframes": ["M1", "M5"],
+                    "history_days": 365,
+                    "cache_enabled": True,
+                    "cache_ttl": 3600
+                },
+                "trading": {
+                    "risk_per_trade": 0.01,
+                    "max_positions": 3,
+                    "max_daily_loss": 0.05,
+                    "fibonacci_levels": {
+                        "retracements": [0.236, 0.382, 0.5, 0.618, 0.786],
+                        "extensions": [1.0, 1.272, 1.618, 2.0]
+                    }
+                },
+                "ml": {
+                    "model_retrain_days": 30,
+                    "feature_lookback": 100,
+                    "validation_split": 0.2,
+                    "random_state": 42
+                },
+                "logging": {
+                    "level": "INFO",
+                    "file": "logs/trading_bot.log",
+                    "max_size": "100MB",
+                    "backup_count": 5
+                },
+                "database": {
+                    "url": "sqlite:///data/trading_bot.db",
+                    "echo": False
+                },
+                "api": {
+                    "host": "localhost",
+                    "port": 8000,
+                    "debug": True
+                }
+            }
+            
+            config_file = config_dir / "development.yaml"
+            with open(config_file, 'w') as f:
+                yaml.dump(default_config, f, default_flow_style=False)
+            
+            logger.info(f"Created default configuration: {config_file}")
+            
+        except Exception as e:
+            logger.error(f"Failed to create default configuration: {e}")
+            raise
 
 
 async def main():
@@ -188,8 +270,8 @@ async def main():
         print("🎯 FIBONACCI TRADING BOT - AI Enhanced")
         print("="*60)
         print(f"📅 Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"🔧 Environment: {config.environment}")
-        print(f"📊 Dashboard: http://{config.api.host}:{config.api.port}")
+        print("🔧 Environment: Initializing...")
+        print("📊 Dashboard: http://localhost:8000 (default)")
         print("="*60 + "\n")
         
         # Create and start application
