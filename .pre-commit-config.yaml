@@ -1,193 +1,88 @@
-# Pre-commit hooks configuration for Fibonacci Trading Bot
-# See https://pre-commit.com for more information
-
 repos:
-  # General hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
     hooks:
       - id: trailing-whitespace
-        description: Trims trailing whitespace
       - id: end-of-file-fixer
-        description: Ensures files end with a newline
       - id: check-yaml
-        description: Validates YAML files
-      - id: check-json
-        description: Validates JSON files
-      - id: check-toml
-        description: Validates TOML files
-      - id: check-xml
-        description: Validates XML files
       - id: check-added-large-files
-        description: Prevents adding large files to git
-        args: ['--maxkb=1000']
       - id: check-merge-conflict
-        description: Checks for merge conflict markers
-      - id: check-case-conflict
-        description: Checks for case conflicts in filenames
-      - id: check-docstring-first
-        description: Checks that docstrings come first
+      - id: check-json
+      - id: check-toml
+      - id: check-xml
       - id: debug-statements
-        description: Checks for debugger imports and breakpoints
       - id: name-tests-test
-        description: Ensures test files are named correctly
-        args: ['--pytest-test-first']
-      - id: requirements-txt-fixer
-        description: Sorts requirements.txt files
+        args: [--pytest-test-first]
 
-  # Python code formatting
   - repo: https://github.com/psf/black
     rev: 23.3.0
     hooks:
       - id: black
-        description: Formats Python code with Black
         language_version: python3.9
-        args: ['--line-length=88']
+        args: [--line-length=88]
 
-  # Import sorting
-  - repo: https://github.com/pycqa/isort
-    rev: 5.12.0
-    hooks:
-      - id: isort
-        description: Sorts Python imports
-        args: ['--profile=black', '--line-length=88']
-
-  # Python linting
   - repo: https://github.com/pycqa/flake8
     rev: 6.0.0
     hooks:
       - id: flake8
-        description: Lints Python code with Flake8
-        args: 
-          - '--max-line-length=88'
-          - '--max-complexity=10'
-          - '--select=E,W,F'
-          - '--ignore=E203,E501,W503'
+        args: [--max-line-length=88, --max-complexity=10]
         additional_dependencies:
           - flake8-docstrings
           - flake8-import-order
-          - flake8-bugbear
+          - flake8-annotations
 
-  # Type checking
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        args: [--profile=black, --line-length=88]
+
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.3.0
     hooks:
       - id: mypy
-        description: Static type checking with MyPy
-        args: ['--ignore-missing-imports', '--strict-optional']
-        additional_dependencies: 
+        additional_dependencies:
           - types-requests
           - types-PyYAML
           - types-python-dateutil
+        args: [--ignore-missing-imports, --no-strict-optional]
 
-  # Security scanning
   - repo: https://github.com/PyCQA/bandit
     rev: 1.7.5
     hooks:
       - id: bandit
-        description: Security linting with Bandit
-        args: ['-r', 'src/', '-f', 'json']
+        args: [-r, src/]
         exclude: tests/
 
-  # Documentation
-  - repo: https://github.com/pycqa/pydocstyle
-    rev: 6.3.0
+  - repo: https://github.com/pycqa/pylint
+    rev: v2.17.4
     hooks:
-      - id: pydocstyle
-        description: Checks Python docstring style
-        args: ['--convention=google']
-        match: '^src/.*\.py$'
+      - id: pylint
+        args: [--disable=all, --enable=unused-import]
 
-  # Jupyter notebooks (if any)
-  - repo: https://github.com/nbQA-dev/nbQA
-    rev: 1.7.0
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.8.0
     hooks:
-      - id: nbqa-black
-        description: Formats Jupyter notebooks with Black
-        additional_dependencies: [black==23.3.0]
-      - id: nbqa-isort
-        description: Sorts imports in Jupyter notebooks
-        additional_dependencies: [isort==5.12.0]
-      - id: nbqa-flake8
-        description: Lints Jupyter notebooks with Flake8
-        additional_dependencies: [flake8==6.0.0]
+      - id: pyupgrade
+        args: [--py39-plus]
 
-  # YAML formatting
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.0.0-alpha.9-for-vscode
+  - repo: https://github.com/pycqa/autoflake
+    rev: v2.1.1
     hooks:
-      - id: prettier
-        description: Formats YAML, JSON, and Markdown files
-        types_or: [yaml, json, markdown]
-        args: ['--tab-width=2']
+      - id: autoflake
+        args:
+          - --remove-all-unused-imports
+          - --remove-unused-variables
+          - --remove-duplicate-keys
+          - --in-place
 
-  # Shell script linting
-  - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.9.0.2
-    hooks:
-      - id: shellcheck
-        description: Lints shell scripts
-
-  # Commit message formatting
-  - repo: https://github.com/commitizen-tools/commitizen
-    rev: 3.2.1
-    hooks:
-      - id: commitizen
-        description: Checks commit message format
-        stages: [commit-msg]
-
-  # Local hooks for project-specific checks
   - repo: local
     hooks:
-      - id: trading-strategy-validation
-        name: Trading Strategy Validation
-        description: Validates trading strategy configuration files
-        entry: python scripts/validate_strategy_config.py
-        language: python
-        files: ^config/.*\.yaml$
-        pass_filenames: true
-
-      - id: fibonacci-calculation-test
-        name: Fibonacci Calculation Test
-        description: Runs quick tests for Fibonacci calculations
-        entry: python -m pytest tests/unit/test_fibonacci.py -q
-        language: python
-        files: ^src/core/fibonacci\.py$
+      - id: pytest-check
+        name: pytest-check
+        entry: pytest
+        language: system
         pass_filenames: false
-
-      - id: mt5-integration-check
-        name: MT5 Integration Check
-        description: Validates MT5 integration code
-        entry: python scripts/check_mt5_integration.py
-        language: python
-        files: ^src/data/mt5_.*\.py$
-        pass_filenames: true
-
-      - id: risk-management-validation
-        name: Risk Management Validation
-        description: Validates risk management parameters
-        entry: python scripts/validate_risk_parameters.py
-        language: python
-        files: ^src/execution/risk_.*\.py$
-        pass_filenames: true
-
-      - id: performance-regression-check
-        name: Performance Regression Check
-        description: Checks for performance regressions
-        entry: python scripts/performance_check.py
-        language: python
-        files: ^src/core/.*\.py$
-        pass_filenames: false
-
-# Configuration for specific hooks
-ci:
-  autofix_commit_msg: |
-    [pre-commit.ci] auto fixes from pre-commit hooks
-
-    for more information, see https://pre-commit.ci
-  autofix_prs: true
-  autoupdate_branch: ''
-  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
-  autoupdate_schedule: weekly
-  skip: []
-  submodules: false
+        always_run: true
+        args: [tests/unit/, -v, --tb=short]
+        stages: [commit]

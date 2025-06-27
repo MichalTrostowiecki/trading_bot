@@ -1,0 +1,57 @@
+# Production Configuration Template
+environment: production
+
+mt5:
+  server: "${MT5_SERVER}"
+  login: ${MT5_LOGIN}
+  password: "${MT5_PASSWORD}"
+  timeout: 10000
+
+data:
+  symbols: ["EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD"]
+  timeframes: ["M1", "M5", "M15", "H1", "H4", "D1"]
+  history_days: 730
+  cache_enabled: true
+  cache_ttl: 1800
+
+trading:
+  risk_per_trade: 0.01
+  max_positions: 3
+  max_daily_loss: 0.05
+  fibonacci_levels:
+    retracements: [0.236, 0.382, 0.5, 0.618, 0.786]
+    extensions: [1.0, 1.272, 1.618, 2.0]
+
+ml:
+  model_retrain_days: 7
+  feature_lookback: 200
+  validation_split: 0.2
+  random_state: 42
+
+logging:
+  level: INFO
+  file: "data/logs/trading_bot.log"
+  max_size: "500MB"
+  backup_count: 10
+
+database:
+  url: "${DATABASE_URL}"
+  echo: false
+  pool_size: 20
+  max_overflow: 30
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+  debug: false
+
+security:
+  secret_key: "${SECRET_KEY}"
+  jwt_secret: "${JWT_SECRET_KEY}"
+  jwt_algorithm: "HS256"
+  jwt_expiration: 24  # hours
+
+monitoring:
+  prometheus_port: 9090
+  health_check_port: 8080
+  alert_webhook: "${ALERT_WEBHOOK_URL}"
