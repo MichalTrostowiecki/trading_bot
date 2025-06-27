@@ -1,4 +1,4 @@
-# Testing Strategy - Fibonacci Trading Bot Project
+nvm install --lts# Testing Strategy - Fibonacci Trading Bot Project
 
 ## Overview
 This document outlines the comprehensive testing strategy for the Fibonacci-based AI trading bot, covering all testing levels from unit tests to production validation.

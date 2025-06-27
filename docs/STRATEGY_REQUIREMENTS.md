@@ -15,63 +15,70 @@ The system identifies major market swings using fractal analysis and applies Fib
 
 ---
 
-## Round 1: Core Mechanics (Fractals & Swings)
+## Round 1: Core Mechanics (Fractals & Swings) ✅ COMPLETED
 
-### Questions for Strategy Owner
+### Strategy Context: Elliott Wave Foundation
+The strategy is based on Elliott Wave concepts, specifically:
+- **Dominant Swing = Impulsive Move (potentially Wave 3)**
+- **Fibonacci Retracements = Wave 4 correction levels**
+- **Entry = Wave 5 continuation in direction of dominant swing**
+
+### Questions and Answers
 
 #### 1. Fractal Definition & Detection
 **Q: How many bars do you use to define a fractal?**
-- Standard 5-bar fractal (middle bar highest/lowest of 5)?
-- Different periods for different timeframes?
-- Any minimum distance requirement between fractals?
-
-**A: [AWAITING RESPONSE]**
+**A: Variable/configurable for optimization testing. Standard 5-bar may not be significant enough to capture market structure. Need to test different periods to find optimal values.**
 
 **Q: Do you use different fractal periods for different timeframes?**
-**A: [AWAITING RESPONSE]**
+**A: Focus on single timeframe (M1 initially). Higher timeframe confluence may be added later for testing.**
 
 **Q: Any minimum distance requirement between fractals?**
-**A: [AWAITING RESPONSE]**
+**A: No minimum distance required. If using 21-bar lookback, need to find ALL fractals in that period.**
+
+**Special Requirement:** Need logic to handle cases where two bars have exact same high/low price to avoid false fractals.
 
 #### 2. Swing Identification
 **Q: How do you define a "major swing"?**
-- Fractal-to-fractal movement?
-- Minimum percentage move required?
-- Time-based filters?
-
-**A: [AWAITING RESPONSE]**
+**A: Swing = movement from one fractal to the next (up fractal to down fractal or vice versa). No minimum percentage move required - all fractal-to-fractal movements qualify as swings.**
 
 **Q: What's your lookback period for identifying swings?**
-- Last N bars?
-- Last N fractals?
-- Dynamic based on volatility?
-
-**A: [AWAITING RESPONSE]**
+**A: Variable/configurable for optimization (example: 140 candles). Go from newest candle backwards X candles and identify all swings, focusing on latest swings.**
 
 **Q: Do you filter swings by minimum size/percentage move?**
-**A: [AWAITING RESPONSE]**
+**A: Variable/configurable for optimization. No fixed minimum - will test to find optimal values.**
 
 #### 3. Dominant Swing Selection
 **Q: How do you determine which swing is "dominant"?**
-- Size/magnitude priority?
-- Recency weight?
-- Volume confirmation?
-- Momentum factors?
-
-**A: [AWAITING RESPONSE]**
+**A: SIZE/MAGNITUDE IS THE ONLY FACTOR. Dominant swing = biggest swing in lookback period (measured in pips/points). Rationale: corrections never go beyond impulsive moves.**
 
 **Q: Do you prioritize recent swings over larger but older ones?**
-**A: [AWAITING RESPONSE]**
+**A: NO. Size is the only criterion. Every new candle triggers check for new fractals and swing comparison. If new swing is bigger than current dominant swing, it becomes the new dominant swing.**
+
+### Swing Update Logic:
+1. New fractal detected → new swing created
+2. Compare new swing size with previous opposite-direction swing
+3. Bigger swing becomes dominant
+4. Keep only last swing in each direction for comparison
 
 ---
 
-## Round 2: Fibonacci Application (TO BE COMPLETED)
+## Round 2: Fibonacci Application ✅ PARTIALLY COMPLETED
 
-### Questions Planned:
-- Specific Fibonacci retracement levels used
-- Extension levels for targets
-- Entry trigger conditions at levels
-- Direction determination logic
+### Confirmed Details:
+
+#### Fibonacci Direction Logic ✅
+**Q: When you find dominant swing (UP), do you apply Fibonacci retracements from swing LOW to swing HIGH?**
+**A: YES - Apply Fibonacci from swing low to swing high, look for retracements to 38.2%, 50%, 61.8% levels, enter LONG on bounces (expecting Wave 5 up).**
+
+#### Entry Triggers 🔄 NEEDS ML DEVELOPMENT
+**Q: What triggers actual entry when price reaches Fibonacci level?**
+**A: Currently looking for candlestick patterns, but this is exactly why ML is needed - to find optimal entry triggers through data analysis.**
+
+### Questions Still Needed:
+- Specific Fibonacci retracement levels to use (23.6%, 38.2%, 50%, 61.8%, 78.6%?)
+- Extension levels for profit targets
+- Multiple entries or single entry per swing
+- Level tolerance (how close to exact level)
 
 ---
 
@@ -98,15 +105,19 @@ The system identifies major market swings using fractal analysis and applies Fib
 ## Implementation Notes
 
 ### Current Understanding:
-- Strategy focuses on swing continuation rather than reversal
-- Fibonacci levels used as entry points in trending markets
-- Fractal-based swing identification is core to the approach
+- **Elliott Wave Foundation**: Strategy targets Wave 5 continuation after Wave 4 correction
+- **Dominant Swing = Impulsive Move**: Biggest swing in lookback period represents likely Wave 3
+- **Size-Only Dominance**: No recency weighting - biggest swing always wins
+- **Single Timeframe Focus**: M1 initially, higher timeframe confluence later
+- **ML-Driven Entries**: Entry triggers to be determined through machine learning analysis
 
 ### Key Implementation Considerations:
-- Real-time fractal detection with configurable parameters
-- Swing analysis with multiple weighting factors
-- Dynamic Fibonacci level calculation
-- Market structure context integration
+- **Configurable Fractal Detection**: Variable periods for optimization
+- **Real-time Swing Updates**: Compare new swings with current dominant on each candle
+- **Edge Case Handling**: Logic for same-price high/low scenarios
+- **Size-Based Comparison**: Measure swings in pips/points for dominance
+- **Fibonacci Calculation**: Apply from swing extremes in dominant direction
+- **ML Integration**: System must support training entry trigger models
 
 ---
 
@@ -146,12 +157,12 @@ dominant_swing:
 
 ## Document Status
 
-- [ ] Round 1: Core Mechanics - **IN PROGRESS**
-- [ ] Round 2: Fibonacci Application - Pending
+- [x] Round 1: Core Mechanics - **COMPLETED** ✅
+- [x] Round 2: Fibonacci Application - **PARTIALLY COMPLETED** 🔄 
 - [ ] Round 3: Trade Management - Pending  
 - [ ] Round 4: Filters & Context - Pending
-- [ ] Configuration Parameters - Pending
-- [ ] Implementation Specifications - Pending
+- [ ] Configuration Parameters - In Progress
+- [ ] Implementation Specifications - In Progress
 
 ---
 
