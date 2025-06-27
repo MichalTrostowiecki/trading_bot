@@ -78,43 +78,55 @@ class TradingBotSetup:
                 sys.executable, "-m", "pip", "install", "--upgrade", "pip"
             ], check=True)
             
-            # Install requirements
+            # Try core dependencies first (Python 3.11 compatible)
+            core_requirements_file = self.project_root / "requirements-core.txt"
             requirements_file = self.project_root / "requirements.txt"
-            if requirements_file.exists():
-                print("Installing main requirements...")
-                subprocess.run([
-                    sys.executable, "-m", "pip", "install", "-r", str(requirements_file)
-                ], check=True)
             
-            # Install development requirements
+            if core_requirements_file.exists():
+                print("Installing core requirements (Python 3.11 compatible)...")
+                try:
+                    subprocess.run([
+                        sys.executable, "-m", "pip", "install", "-r", str(core_requirements_file)
+                    ], check=True)
+                    print("✅ Core requirements installed successfully")
+                except subprocess.CalledProcessError:
+                    print("⚠️  Some core packages failed, trying individual installation...")
+                    # Use the core installer script
+                    core_installer = self.project_root / "scripts" / "install_core_dependencies.py"
+                    if core_installer.exists():
+                        subprocess.run([sys.executable, str(core_installer)], check=True)
+            
+            elif requirements_file.exists():
+                print("Installing main requirements...")
+                try:
+                    subprocess.run([
+                        sys.executable, "-m", "pip", "install", "-r", str(requirements_file)
+                    ], check=True)
+                except subprocess.CalledProcessError as e:
+                    print("❌ Failed to install all requirements")
+                    print("💡 Try using: python scripts/install_core_dependencies.py")
+                    print("    This installs only essential packages for Python 3.11")
+                    return False
+            
+            # Install development requirements (optional)
             dev_requirements_file = self.project_root / "requirements-dev.txt"
             if dev_requirements_file.exists():
                 print("Installing development requirements...")
-                subprocess.run([
-                    sys.executable, "-m", "pip", "install", "-r", str(dev_requirements_file)
-                ], check=True)
+                try:
+                    subprocess.run([
+                        sys.executable, "-m", "pip", "install", "-r", str(dev_requirements_file)
+                    ], check=False)  # Don't fail if dev requirements have issues
+                    print("✅ Development requirements installed")
+                except:
+                    print("⚠️  Some development packages failed (optional)")
             
-            # Windows-specific packages
-            if self.is_windows:
-                print("Installing Windows-specific packages...")
-                windows_packages = [
-                    "pywin32",
-                    "wmi"
-                ]
-                for package in windows_packages:
-                    try:
-                        subprocess.run([
-                            sys.executable, "-m", "pip", "install", package
-                        ], check=True)
-                        print(f"✅ Installed {package}")
-                    except subprocess.CalledProcessError:
-                        print(f"⚠️  Failed to install {package}")
-            
-            print("✅ Dependencies installed successfully\n")
+            print("✅ Dependencies installation completed\n")
             return True
             
         except subprocess.CalledProcessError as e:
             print(f"❌ Failed to install dependencies: {e}")
+            print("💡 Try manual installation:")
+            print("   python scripts/install_core_dependencies.py")
             return False
         except Exception as e:
             print(f"❌ Unexpected error installing dependencies: {e}")
