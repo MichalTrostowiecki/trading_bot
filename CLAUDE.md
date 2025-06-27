@@ -5,6 +5,7 @@
 ### Development Workflow Requirements
 
 #### Git Commit Strategy
+- **Work on development branch** for all ongoing development
 - **Commit frequently** as we progress through development phases
 - Use **conventional commit format**: `type(scope): description`
 - Commit after completing each major task or feature
@@ -40,17 +41,26 @@
 5. **Follow the phase-by-phase plan**
 
 ### Current Project Status
-- **Phase**: Documentation and project setup (completed)
-- **Next Phase**: Phase 1 - Foundation & Research Infrastructure
-- **Repository**: Clean slate with complete documentation suite
-- **Structure**: All directories and templates created
-- **Dependencies**: All requirements files created and ready
+- **Phase**: Phase 1 - Foundation & Research Infrastructure (COMPLETED)
+- **Next Phase**: Strategy Requirements Gathering & Phase 2 Planning
+- **Repository**: Complete foundation with data pipeline, MT5 integration, and research tools
+- **Structure**: Full implementation ready for strategy-specific development
+- **Strategy Status**: Requirements gathering in progress
+
+### Strategy Context
+- **Core Strategy**: Fibonacci Retracement Continuation Strategy
+- **Approach**: Fractal-based swing identification with Fibonacci entry levels
+- **Direction**: Trade in direction of dominant swing for continuation moves
+- **Requirements Doc**: `docs/STRATEGY_REQUIREMENTS.md` - **CRITICAL REFERENCE**
+- **Status**: Detailed Q&A in progress to capture exact strategy specifications
 
 ### AI Agent Instructions
 When working on this project:
-1. Always check current phase and task status
-2. Commit changes after each completed task
-3. Update relevant documentation files
-4. Follow the testing strategy outlined in docs
-5. Use the dependency matrix for installation order
-6. Reference the git workflow guide for procedures
+1. **ALWAYS read `docs/STRATEGY_REQUIREMENTS.md` first** - contains specific strategy details
+2. Check current phase and task status in todo list
+3. Commit changes after each completed task
+4. Update relevant documentation files
+5. Follow the testing strategy outlined in docs
+6. Use the dependency matrix for installation order
+7. Reference the git workflow guide for procedures
+8. **For strategy implementation**: Must follow exact specifications from requirements doc
