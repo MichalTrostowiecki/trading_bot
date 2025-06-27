@@ -1,404 +1,263 @@
 #!/usr/bin/env python3
 """
-Development Environment Setup Script for Fibonacci Trading Bot
-
-This script automates the setup of the development environment including:
-- Git configuration
-- Python virtual environment
-- Dependencies installation
-- Pre-commit hooks
-- IDE configuration
-- Initial project validation
-
-Usage:
-    python scripts/setup_development_environment.py
+Development Environment Setup Script
+Automated setup for the Fibonacci Trading Bot development environment.
 """
 
 import os
 import sys
 import subprocess
-import json
 import platform
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
-class DevelopmentSetup:
-    """Handles the complete development environment setup."""
+
+class EnvironmentSetup:
+    """Automated development environment setup."""
     
     def __init__(self):
         self.project_root = Path(__file__).parent.parent
-        self.system = platform.system()
-        self.python_executable = sys.executable
-        self.errors: List[str] = []
-        self.warnings: List[str] = []
+        self.venv_path = self.project_root / "venv"
+        self.is_windows = platform.system() == "Windows"
         
-    def run_command(self, command: List[str], check: bool = True, capture_output: bool = True) -> subprocess.CompletedProcess:
-        """Run a command and handle errors."""
+    def run_command(self, command: List[str], check: bool = True) -> subprocess.CompletedProcess:
+        """Run a command and return the result."""
+        print(f"Running: {' '.join(command)}")
         try:
             result = subprocess.run(
                 command, 
                 check=check, 
-                capture_output=capture_output, 
+                capture_output=True, 
                 text=True,
                 cwd=self.project_root
             )
+            if result.stdout:
+                print(result.stdout)
             return result
         except subprocess.CalledProcessError as e:
-            error_msg = f"Command failed: {' '.join(command)}\nError: {e.stderr}"
-            self.errors.append(error_msg)
+            print(f"Error running command: {e}")
+            if e.stderr:
+                print(f"Error output: {e.stderr}")
             if check:
                 raise
             return e
     
-    def check_prerequisites(self) -> bool:
-        """Check if all prerequisites are installed."""
-        print("🔍 Checking prerequisites...")
+    def check_python_version(self) -> bool:
+        """Check if Python 3.9+ is available."""
+        print("Checking Python version...")
         
-        prerequisites = {
-            'git': ['git', '--version'],
-            'python': [self.python_executable, '--version'],
-            'pip': [self.python_executable, '-m', 'pip', '--version']
-        }
-        
-        missing = []
-        for name, command in prerequisites.items():
-            try:
-                result = self.run_command(command, check=False)
-                if result.returncode == 0:
-                    print(f"  ✅ {name}: {result.stdout.strip()}")
-                else:
-                    missing.append(name)
-                    print(f"  ❌ {name}: Not found")
-            except Exception:
-                missing.append(name)
-                print(f"  ❌ {name}: Not found")
-        
-        if missing:
-            print(f"\n❌ Missing prerequisites: {', '.join(missing)}")
-            print("Please install the missing prerequisites and run this script again.")
+        if sys.version_info < (3, 9):
+            print(f"❌ Python 3.9+ required, found {sys.version}")
             return False
         
-        print("✅ All prerequisites found!")
+        print(f"✅ Python {sys.version} - OK")
         return True
     
-    def setup_git_configuration(self) -> bool:
-        """Set up Git configuration."""
-        print("\n🔧 Setting up Git configuration...")
+    def create_virtual_environment(self) -> bool:
+        """Create Python virtual environment."""
+        print("\nCreating virtual environment...")
+        
+        if self.venv_path.exists():
+            print("Virtual environment already exists, skipping creation")
+            return True
         
         try:
-            # Check if user.name and user.email are configured
-            name_result = self.run_command(['git', 'config', 'user.name'], check=False)
-            email_result = self.run_command(['git', 'config', 'user.email'], check=False)
-            
-            if name_result.returncode != 0 or not name_result.stdout.strip():
-                name = input("Enter your full name for Git commits: ")
-                self.run_command(['git', 'config', 'user.name', name])
-                print(f"  ✅ Set user.name to: {name}")
-            else:
-                print(f"  ✅ user.name already set: {name_result.stdout.strip()}")
-            
-            if email_result.returncode != 0 or not email_result.stdout.strip():
-                email = input("Enter your email for Git commits: ")
-                self.run_command(['git', 'config', 'user.email', email])
-                print(f"  ✅ Set user.email to: {email}")
-            else:
-                print(f"  ✅ user.email already set: {email_result.stdout.strip()}")
-            
-            # Set up additional Git configurations
-            git_configs = {
-                'init.defaultBranch': 'main',
-                'pull.rebase': 'false',
-                'core.autocrlf': 'true' if self.system == 'Windows' else 'input',
-                'core.editor': 'code --wait'
-            }
-            
-            for key, value in git_configs.items():
-                self.run_command(['git', 'config', key, value], check=False)
-                print(f"  ✅ Set {key} to: {value}")
-            
-            # Check if we're in a Git repository
-            result = self.run_command(['git', 'status'], check=False)
-            if result.returncode != 0:
-                print("  ⚠️  Not in a Git repository. Make sure to clone the repository first.")
-                self.warnings.append("Not in a Git repository")
-            
+            self.run_command([sys.executable, "-m", "venv", str(self.venv_path)])
+            print("✅ Virtual environment created successfully")
             return True
-            
-        except Exception as e:
-            self.errors.append(f"Git configuration failed: {e}")
+        except subprocess.CalledProcessError:
+            print("❌ Failed to create virtual environment")
             return False
     
-    def setup_python_environment(self) -> bool:
-        """Set up Python virtual environment and install dependencies."""
-        print("\n🐍 Setting up Python environment...")
+    def get_pip_executable(self) -> str:
+        """Get the pip executable path for the virtual environment."""
+        if self.is_windows:
+            return str(self.venv_path / "Scripts" / "pip.exe")
+        else:
+            return str(self.venv_path / "bin" / "pip")
+    
+    def install_dependencies(self) -> bool:
+        """Install project dependencies."""
+        print("\nInstalling dependencies...")
         
+        pip_exe = self.get_pip_executable()
+        
+        # Upgrade pip first
         try:
-            venv_path = self.project_root / 'venv'
-            
-            # Create virtual environment if it doesn't exist
-            if not venv_path.exists():
-                print("  📦 Creating virtual environment...")
-                self.run_command([self.python_executable, '-m', 'venv', 'venv'])
-                print("  ✅ Virtual environment created")
-            else:
-                print("  ✅ Virtual environment already exists")
-            
-            # Determine the correct Python executable in venv
-            if self.system == 'Windows':
-                venv_python = venv_path / 'Scripts' / 'python.exe'
-                pip_executable = [str(venv_python), '-m', 'pip']
-            else:
-                venv_python = venv_path / 'bin' / 'python'
-                pip_executable = [str(venv_python), '-m', 'pip']
-            
-            # Upgrade pip
-            print("  📦 Upgrading pip...")
-            self.run_command(pip_executable + ['install', '--upgrade', 'pip'])
-            
-            # Install requirements
-            requirements_files = [
-                'requirements.txt',
-                'requirements-dev.txt',
-                'requirements-test.txt'
-            ]
-            
-            for req_file in requirements_files:
-                req_path = self.project_root / req_file
-                if req_path.exists():
-                    print(f"  📦 Installing {req_file}...")
-                    self.run_command(pip_executable + ['install', '-r', str(req_path)])
-                    print(f"  ✅ Installed {req_file}")
-                else:
-                    print(f"  ⚠️  {req_file} not found, skipping...")
-            
-            return True
-            
-        except Exception as e:
-            self.errors.append(f"Python environment setup failed: {e}")
+            self.run_command([pip_exe, "install", "--upgrade", "pip"])
+            print("✅ Pip upgraded successfully")
+        except subprocess.CalledProcessError:
+            print("❌ Failed to upgrade pip")
             return False
+        
+        # Install production dependencies
+        requirements_file = self.project_root / "requirements.txt"
+        if requirements_file.exists():
+            try:
+                self.run_command([pip_exe, "install", "-r", str(requirements_file)])
+                print("✅ Production dependencies installed")
+            except subprocess.CalledProcessError:
+                print("❌ Failed to install production dependencies")
+                return False
+        
+        # Install development dependencies
+        dev_requirements_file = self.project_root / "requirements-dev.txt"
+        if dev_requirements_file.exists():
+            try:
+                self.run_command([pip_exe, "install", "-r", str(dev_requirements_file)])
+                print("✅ Development dependencies installed")
+            except subprocess.CalledProcessError:
+                print("❌ Failed to install development dependencies")
+                return False
+        
+        return True
     
     def setup_pre_commit_hooks(self) -> bool:
-        """Set up pre-commit hooks."""
-        print("\n🪝 Setting up pre-commit hooks...")
+        """Install pre-commit hooks."""
+        print("\nSetting up pre-commit hooks...")
+        
+        pip_exe = self.get_pip_executable()
         
         try:
-            # Check if pre-commit is installed
-            venv_path = self.project_root / 'venv'
-            if self.system == 'Windows':
-                precommit_executable = [str(venv_path / 'Scripts' / 'python.exe'), '-m', 'pre_commit']
-            else:
-                precommit_executable = [str(venv_path / 'bin' / 'python'), '-m', 'pre_commit']
+            # Install pre-commit if not already installed
+            self.run_command([pip_exe, "install", "pre-commit"])
             
-            # Install pre-commit hooks
-            result = self.run_command(precommit_executable + ['install'], check=False)
-            if result.returncode == 0:
-                print("  ✅ Pre-commit hooks installed")
-                
-                # Run pre-commit on all files to set up the environment
-                print("  🔍 Running pre-commit on all files (this may take a while)...")
-                result = self.run_command(precommit_executable + ['run', '--all-files'], check=False)
-                if result.returncode == 0:
-                    print("  ✅ Pre-commit setup completed successfully")
-                else:
-                    print("  ⚠️  Pre-commit found some issues, but hooks are installed")
-                    self.warnings.append("Pre-commit found formatting issues")
+            # Install hooks
+            if self.is_windows:
+                python_exe = str(self.venv_path / "Scripts" / "python.exe")
             else:
-                print("  ❌ Failed to install pre-commit hooks")
-                self.errors.append("Pre-commit installation failed")
+                python_exe = str(self.venv_path / "bin" / "python")
+            
+            self.run_command([python_exe, "-m", "pre_commit", "install"])
+            print("✅ Pre-commit hooks installed")
+            return True
+        except subprocess.CalledProcessError:
+            print("❌ Failed to install pre-commit hooks")
+            return False
+    
+    def create_configuration_file(self) -> bool:
+        """Create development configuration file."""
+        print("\nSetting up configuration...")
+        
+        config_dir = self.project_root / "config"
+        template_file = config_dir / "development.yaml.template"
+        config_file = config_dir / "development.yaml"
+        
+        if config_file.exists():
+            print("Development configuration already exists")
+            return True
+        
+        if template_file.exists():
+            try:
+                import shutil
+                shutil.copy2(template_file, config_file)
+                print("✅ Development configuration created from template")
+                print(f"📝 Please edit {config_file} with your MT5 credentials")
+                return True
+            except Exception as e:
+                print(f"❌ Failed to create configuration file: {e}")
                 return False
-            
-            return True
-            
-        except Exception as e:
-            self.errors.append(f"Pre-commit setup failed: {e}")
+        else:
+            print("❌ Configuration template not found")
             return False
     
-    def setup_ide_configuration(self) -> bool:
-        """Set up IDE configuration files."""
-        print("\n💻 Setting up IDE configuration...")
+    def verify_installation(self) -> bool:
+        """Verify the installation is working."""
+        print("\nVerifying installation...")
         
-        try:
-            # VS Code settings
-            vscode_dir = self.project_root / '.vscode'
-            vscode_dir.mkdir(exist_ok=True)
-            
-            vscode_settings = {
-                "python.defaultInterpreterPath": "./venv/Scripts/python.exe" if self.system == 'Windows' else "./venv/bin/python",
-                "python.linting.enabled": True,
-                "python.linting.flake8Enabled": True,
-                "python.linting.mypyEnabled": True,
-                "python.formatting.provider": "black",
-                "python.testing.pytestEnabled": True,
-                "python.testing.pytestArgs": ["tests/"],
-                "git.enableCommitSigning": False,
-                "files.exclude": {
-                    "**/__pycache__": True,
-                    "**/.pytest_cache": True,
-                    "**/.mypy_cache": True,
-                    "**/venv": True
-                },
-                "python.analysis.typeCheckingMode": "basic"
-            }
-            
-            settings_file = vscode_dir / 'settings.json'
-            with open(settings_file, 'w') as f:
-                json.dump(vscode_settings, f, indent=2)
-            
-            print("  ✅ VS Code settings configured")
-            
-            # Create launch configuration for debugging
-            launch_config = {
-                "version": "0.2.0",
-                "configurations": [
-                    {
-                        "name": "Python: Current File",
-                        "type": "python",
-                        "request": "launch",
-                        "program": "${file}",
-                        "console": "integratedTerminal",
-                        "cwd": "${workspaceFolder}"
-                    },
-                    {
-                        "name": "Python: Trading Bot",
-                        "type": "python",
-                        "request": "launch",
-                        "program": "${workspaceFolder}/src/main.py",
-                        "console": "integratedTerminal",
-                        "cwd": "${workspaceFolder}",
-                        "env": {
-                            "ENVIRONMENT": "development"
-                        }
-                    }
-                ]
-            }
-            
-            launch_file = vscode_dir / 'launch.json'
-            with open(launch_file, 'w') as f:
-                json.dump(launch_config, f, indent=2)
-            
-            print("  ✅ VS Code launch configuration created")
-            
-            return True
-            
-        except Exception as e:
-            self.errors.append(f"IDE configuration failed: {e}")
-            return False
-    
-    def validate_setup(self) -> bool:
-        """Validate the setup by running basic tests."""
-        print("\n🧪 Validating setup...")
+        if self.is_windows:
+            python_exe = str(self.venv_path / "Scripts" / "python.exe")
+        else:
+            python_exe = str(self.venv_path / "bin" / "python")
         
-        try:
-            venv_path = self.project_root / 'venv'
-            if self.system == 'Windows':
-                python_executable = str(venv_path / 'Scripts' / 'python.exe')
-            else:
-                python_executable = str(venv_path / 'bin' / 'python')
-            
-            # Test Python imports
-            test_imports = [
-                'import pandas',
-                'import numpy',
-                'import pytest',
-                'import black',
-                'import flake8',
-                'import mypy'
-            ]
-            
-            for import_test in test_imports:
-                result = self.run_command([python_executable, '-c', import_test], check=False)
-                if result.returncode == 0:
-                    print(f"  ✅ {import_test}")
-                else:
-                    print(f"  ❌ {import_test}")
-                    self.warnings.append(f"Failed to import: {import_test}")
-            
-            # Test if we can run basic commands
-            commands_to_test = [
-                ([python_executable, '-m', 'black', '--version'], 'Black formatter'),
-                ([python_executable, '-m', 'flake8', '--version'], 'Flake8 linter'),
-                ([python_executable, '-m', 'pytest', '--version'], 'Pytest testing'),
-            ]
-            
-            for command, description in commands_to_test:
-                result = self.run_command(command, check=False)
-                if result.returncode == 0:
-                    print(f"  ✅ {description}")
-                else:
-                    print(f"  ❌ {description}")
-                    self.warnings.append(f"Failed to run: {description}")
-            
-            return True
-            
-        except Exception as e:
-            self.errors.append(f"Setup validation failed: {e}")
-            return False
+        # Test Python imports
+        test_imports = [
+            "import pandas",
+            "import numpy", 
+            "import MetaTrader5",
+            "import fastapi",
+            "import pytest"
+        ]
+        
+        for import_test in test_imports:
+            try:
+                self.run_command([python_exe, "-c", import_test])
+                print(f"✅ {import_test} - OK")
+            except subprocess.CalledProcessError:
+                print(f"❌ {import_test} - FAILED")
+                return False
+        
+        return True
     
-    def print_summary(self):
-        """Print setup summary."""
+    def print_next_steps(self):
+        """Print next steps for the user."""
         print("\n" + "="*60)
-        print("🎉 DEVELOPMENT ENVIRONMENT SETUP COMPLETE!")
+        print("🎉 SETUP COMPLETE!")
         print("="*60)
         
-        if not self.errors and not self.warnings:
-            print("✅ Setup completed successfully with no issues!")
+        if self.is_windows:
+            activate_cmd = r"venv\Scripts\activate"
         else:
-            if self.warnings:
-                print(f"⚠️  Setup completed with {len(self.warnings)} warnings:")
-                for warning in self.warnings:
-                    print(f"   • {warning}")
-            
-            if self.errors:
-                print(f"❌ Setup completed with {len(self.errors)} errors:")
-                for error in self.errors:
-                    print(f"   • {error}")
+            activate_cmd = "source venv/bin/activate"
         
-        print("\n📋 NEXT STEPS:")
-        print("1. Activate your virtual environment:")
-        if self.system == 'Windows':
-            print("   venv\\Scripts\\activate")
-        else:
-            print("   source venv/bin/activate")
-        
-        print("2. Read the documentation:")
-        print("   • docs/GIT_WORKFLOW_GUIDE.md")
-        print("   • docs/CORE_STRATEGY_SPECIFICATION.md")
-        print("   • docs/PHASE_1_DETAILED_SPECIFICATION.md")
-        
-        print("3. Start development:")
-        print("   git checkout -b feature/your-feature-name")
-        print("   # Make your changes")
-        print("   git add .")
-        print("   git commit -m 'feat: your feature description'")
-        
-        print("\n🆘 NEED HELP?")
-        print("• Check docs/GIT_COMMANDS_REFERENCE.md for Git help")
-        print("• Review docs/DEPENDENCIES_MATRIX.md for dependency issues")
-        print("• Open an issue on GitHub for project-specific questions")
+        print(f"""
+Next steps:
+1. Activate virtual environment:
+   {activate_cmd}
+
+2. Configure your MT5 credentials:
+   Edit config/development.yaml
+
+3. Test the setup:
+   python -c "import src; print('Setup successful!')"
+
+4. Start development:
+   - Check Phase 1 tasks in docs/PHASE_1_DETAILED_SPECIFICATION.md
+   - Run tests: pytest tests/ -v
+   - Start coding!
+
+📚 Documentation: See docs/ directory for detailed guides
+🐛 Issues: Check troubleshooting section in docs/
+""")
     
-    def run(self):
+    def run_setup(self) -> bool:
         """Run the complete setup process."""
-        print("🚀 FIBONACCI TRADING BOT - DEVELOPMENT ENVIRONMENT SETUP")
+        print("🚀 Fibonacci Trading Bot - Development Environment Setup")
         print("="*60)
         
-        if not self.check_prerequisites():
-            return False
+        steps = [
+            ("Checking Python version", self.check_python_version),
+            ("Creating virtual environment", self.create_virtual_environment),
+            ("Installing dependencies", self.install_dependencies),
+            ("Setting up pre-commit hooks", self.setup_pre_commit_hooks),
+            ("Creating configuration", self.create_configuration_file),
+            ("Verifying installation", self.verify_installation),
+        ]
         
-        success = True
-        success &= self.setup_git_configuration()
-        success &= self.setup_python_environment()
-        success &= self.setup_pre_commit_hooks()
-        success &= self.setup_ide_configuration()
-        success &= self.validate_setup()
+        for step_name, step_func in steps:
+            print(f"\n📋 {step_name}...")
+            if not step_func():
+                print(f"\n❌ Setup failed at: {step_name}")
+                return False
         
-        self.print_summary()
-        return success
+        self.print_next_steps()
+        return True
+
 
 def main():
     """Main entry point."""
-    setup = DevelopmentSetup()
-    success = setup.run()
-    sys.exit(0 if success else 1)
+    setup = EnvironmentSetup()
+    
+    try:
+        success = setup.run_setup()
+        sys.exit(0 if success else 1)
+    except KeyboardInterrupt:
+        print("\n\n❌ Setup interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ Unexpected error: {e}")
+        sys.exit(1)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
