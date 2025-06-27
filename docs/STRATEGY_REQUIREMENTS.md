@@ -96,13 +96,27 @@ The strategy is based on Elliott Wave concepts, specifically:
 
 ---
 
-## Round 3: Trade Management (TO BE COMPLETED)
+## Round 3: Trade Management ✅ COMPLETED
 
-### Questions Planned:
-- Entry execution methods
-- Stop loss placement rules
-- Take profit targeting approach
-- Position sizing methodology
+### Confirmed Details:
+
+#### Stop Loss Placement ✅
+**Q: Where and how do you place stop losses?**
+**A: Signal bar-based placement:**
+- **Long trades**: 2 pips below the signal bar
+- **Short trades**: 2 pips + spread above the signal bar
+- **Buffer configurable** for testing optimization
+
+#### Position Sizing ✅
+**Q: What position sizing method do you prefer?**
+**A: Percentage-based position sizing. Configurable percentage for testing optimization.**
+
+#### Take Profit Strategy ✅
+**Q: Take profit approach?**
+**A: Use Fibonacci extension levels (covered in Round 2) - test all extension levels (100%, 127.2%, 161.8%, 261.8%) for optimization.**
+
+#### Testing Philosophy ✅
+**All parameters configurable for testing to find optimal results across different market conditions.**
 
 ---
 
@@ -136,6 +150,9 @@ The strategy is based on Elliott Wave concepts, specifically:
 - **Mode-Based Logic**: Separate "Trade Finding" and "Trade Management" modes
 - **Single Trade Management**: No multiple concurrent positions
 - **Setup Invalidation**: Monitor swing extreme breaks for setup invalidation
+- **Signal Bar Stop Losses**: 2-pip buffer below/above signal bar (+ spread for shorts)
+- **Percentage Position Sizing**: Configurable risk percentage per trade
+- **Extension Target Management**: Multiple configurable take profit levels
 
 ---
 
@@ -177,7 +194,7 @@ dominant_swing:
 
 - [x] Round 1: Core Mechanics - **COMPLETED** ✅
 - [x] Round 2: Fibonacci Application - **COMPLETED** ✅ 
-- [ ] Round 3: Trade Management - Pending  
+- [x] Round 3: Trade Management - **COMPLETED** ✅
 - [ ] Round 4: Filters & Context - Pending
 - [ ] Configuration Parameters - In Progress
 - [ ] Implementation Specifications - In Progress
