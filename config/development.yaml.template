@@ -1,0 +1,44 @@
+# Development Configuration Template
+environment: development
+
+mt5:
+  server: "Demo-Server"
+  login: 12345678
+  password: "demo_password"  # Change this!
+  timeout: 10000
+
+data:
+  symbols: ["EURUSD", "GBPUSD", "USDJPY"]
+  timeframes: ["M1", "M5", "M15", "H1", "H4", "D1"]
+  history_days: 365
+  cache_enabled: true
+  cache_ttl: 3600
+
+trading:
+  risk_per_trade: 0.01
+  max_positions: 5
+  max_daily_loss: 0.06
+  fibonacci_levels:
+    retracements: [0.236, 0.382, 0.5, 0.618, 0.786]
+    extensions: [1.0, 1.272, 1.618, 2.0]
+
+ml:
+  model_retrain_days: 30
+  feature_lookback: 100
+  validation_split: 0.2
+  random_state: 42
+
+logging:
+  level: DEBUG
+  file: "data/logs/trading_bot.log"
+  max_size: "100MB"
+  backup_count: 5
+
+database:
+  url: "sqlite:///data/trading_bot.db"
+  echo: false
+
+api:
+  host: "localhost"
+  port: 8000
+  debug: true

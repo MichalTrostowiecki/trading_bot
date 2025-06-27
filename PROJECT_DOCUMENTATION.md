@@ -35,17 +35,23 @@ The system identifies major market swings using fractal analysis and applies Fib
 ## Project Structure
 
 ```
-fibonacci-trading-bot/
-├── docs/                           # Documentation
-│   ├── api/                        # API documentation
-│   ├── architecture/               # System architecture docs
-│   ├── user-guides/               # User manuals
-│   └── development/               # Development guides
+trading-bot-ai/
+├── docs/                          # Complete documentation suite
+│   ├── API_SPECIFICATION.md      # REST API and WebSocket documentation
+│   ├── CORE_STRATEGY_SPECIFICATION.md # Fibonacci strategy details
+│   ├── DEPENDENCIES_MATRIX.md    # Dependency mapping and installation
+│   ├── DEPLOYMENT_GUIDE.md       # Production deployment instructions
+│   ├── GIT_COMMANDS_REFERENCE.md # Git commands quick reference
+│   ├── GIT_WORKFLOW_GUIDE.md     # Git workflow and collaboration
+│   ├── PHASE_1_DETAILED_SPECIFICATION.md # Phase 1 implementation
+│   ├── PHASE_1_2_DATA_PIPELINE_SPECIFICATION.md # Data pipeline specs
+│   ├── QUALITY_ASSURANCE.md      # QA framework and standards
+│   └── TESTING_STRATEGY.md       # Comprehensive testing approach
 ├── src/                           # Source code
-│   ├── core/                      # Core trading logic
-│   ├── data/                      # Data management
-│   ├── ml/                        # Machine learning components
-│   ├── research/                  # Research tools
+│   ├── core/                      # Core trading algorithms
+│   ├── data/                      # Data management and MT5 interface
+│   ├── ml/                        # Machine learning models
+│   ├── research/                  # Research and analysis tools
 │   ├── backtesting/              # Backtesting engine
 │   ├── execution/                # Trade execution
 │   ├── monitoring/               # System monitoring
@@ -53,24 +59,27 @@ fibonacci-trading-bot/
 ├── tests/                         # Test suites
 │   ├── unit/                     # Unit tests
 │   ├── integration/              # Integration tests
-│   ├── performance/              # Performance tests
-│   └── backtesting/              # Strategy tests
+│   └── performance/              # Performance tests
 ├── config/                        # Configuration files
-│   ├── environments/             # Environment configs
-│   ├── strategies/               # Strategy parameters
-│   └── ml-models/                # ML model configs
+│   ├── development.yaml.template # Development config template
+│   └── production.yaml.template  # Production config template
 ├── data/                          # Data storage
 │   ├── historical/               # Historical market data
 │   ├── live/                     # Live data cache
 │   ├── models/                   # Trained ML models
 │   └── logs/                     # System logs
+├── notebooks/                     # Jupyter notebooks
+│   └── research/                 # Research notebooks
 ├── scripts/                       # Utility scripts
-│   ├── setup/                    # Setup scripts
-│   ├── deployment/               # Deployment scripts
-│   └── maintenance/              # Maintenance scripts
-├── docker/                        # Docker configurations
-├── requirements/                  # Dependency files
-└── .github/                      # CI/CD workflows
+├── requirements.txt               # Production dependencies
+├── requirements-dev.txt           # Development dependencies
+├── .env.example                  # Environment variables template
+├── .gitignore                    # Git ignore patterns
+├── LICENSE                       # Proprietary software license
+├── CONTRIBUTING.md               # Contribution guidelines
+├── CHANGELOG.md                  # Version history and roadmap
+├── README.md                     # Project overview and quick start
+└── PROJECT_DOCUMENTATION.md      # This file - complete project docs
 ```
 
 ## Phase Overview
@@ -510,17 +519,24 @@ pre-commit>=2.20.0
 
 ### File Structure Reference
 ```
-fibonacci-trading-bot/
+trading-bot-ai/
 ├── PROJECT_DOCUMENTATION.md           # This file - main project overview
 ├── README.md                          # Project introduction and quick start
-├── .github/                           # GitHub templates and workflows
-│   ├── workflows/
-│   │   └── ci.yml                     # Continuous integration pipeline
-│   ├── ISSUE_TEMPLATE/
-│   │   ├── bug_report.md              # Bug report template
-│   │   └── feature_request.md         # Feature request template
-│   └── pull_request_template.md       # Pull request template
-├── .pre-commit-config.yaml            # Pre-commit hooks configuration
+├── LICENSE                            # Proprietary software license
+├── CONTRIBUTING.md                    # Contribution guidelines
+├── CHANGELOG.md                       # Version history and roadmap
+├── .gitignore                         # Git ignore patterns
+├── .env.example                       # Environment variables template
+├── requirements.txt                   # Production dependencies
+├── requirements-dev.txt               # Development dependencies
+├── config/
+│   ├── development.yaml.template      # Development configuration template
+│   └── production.yaml.template       # Production configuration template
+├── src/                               # Source code (empty, ready for development)
+├── tests/                             # Test suites (empty, ready for development)
+├── data/                              # Data storage (empty, ready for development)
+├── notebooks/                         # Jupyter notebooks (empty, ready for development)
+├── scripts/                           # Utility scripts (empty, ready for development)
 └── docs/
     ├── CORE_STRATEGY_SPECIFICATION.md         # Core Fibonacci strategy details
     ├── GIT_WORKFLOW_GUIDE.md                  # Git workflow and best practices
