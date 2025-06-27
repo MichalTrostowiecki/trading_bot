@@ -5,6 +5,7 @@
 ### Development Workflow Requirements
 
 #### Git Commit Strategy
+- **Work on development branch** for all ongoing development
 - **Commit frequently** as we progress through development phases
 - Use **conventional commit format**: `type(scope): description`
 - Commit after completing each major task or feature
