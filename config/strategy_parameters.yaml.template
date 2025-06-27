@@ -1,0 +1,193 @@
+# Fibonacci Retracement Continuation Strategy Parameters
+# This template will be populated based on strategy requirements gathering
+
+# Fractal Detection Configuration
+fractals:
+  # Number of bars to define a fractal (e.g., 5 for 5-bar fractal)
+  periods: ${FRACTAL_PERIODS:-5}
+  
+  # Minimum distance between fractals (in bars)
+  min_distance: ${FRACTAL_MIN_DISTANCE:-10}
+  
+  # Different periods for different timeframes
+  timeframe_periods:
+    M1: ${FRACTAL_M1_PERIODS:-3}
+    M5: ${FRACTAL_M5_PERIODS:-5}
+    M15: ${FRACTAL_M15_PERIODS:-5}
+    M30: ${FRACTAL_M30_PERIODS:-5}
+    H1: ${FRACTAL_H1_PERIODS:-7}
+    H4: ${FRACTAL_H4_PERIODS:-7}
+    D1: ${FRACTAL_D1_PERIODS:-9}
+
+# Swing Analysis Configuration
+swings:
+  # Lookback period for swing identification
+  lookback_periods: ${SWING_LOOKBACK:-50}
+  
+  # Minimum swing size as percentage of price
+  min_size_percent: ${SWING_MIN_SIZE:-0.5}
+  
+  # Maximum swing age (in bars) to consider
+  max_age_bars: ${SWING_MAX_AGE:-100}
+  
+  # Swing validation requirements
+  validation:
+    min_bars: ${SWING_MIN_BARS:-10}
+    min_range_percent: ${SWING_MIN_RANGE:-0.3}
+
+# Dominant Swing Selection Criteria
+dominant_swing:
+  # Weighting factors (should sum to 1.0)
+  size_weight: ${DOMINANT_SIZE_WEIGHT:-0.4}
+  recency_weight: ${DOMINANT_RECENCY_WEIGHT:-0.3}
+  momentum_weight: ${DOMINANT_MOMENTUM_WEIGHT:-0.2}
+  volume_weight: ${DOMINANT_VOLUME_WEIGHT:-0.1}
+  
+  # Minimum score to qualify as dominant
+  min_score: ${DOMINANT_MIN_SCORE:-0.6}
+
+# Fibonacci Levels Configuration
+fibonacci:
+  # Retracement levels for entries
+  retracement_levels:
+    - 0.236  # 23.6%
+    - 0.382  # 38.2%
+    - 0.500  # 50.0%
+    - 0.618  # 61.8%
+    - 0.786  # 78.6%
+  
+  # Extension levels for targets
+  extension_levels:
+    - 1.000  # 100%
+    - 1.272  # 127.2%
+    - 1.618  # 161.8%
+    - 2.618  # 261.8%
+  
+  # Preferred entry levels (subset of retracement levels)
+  preferred_entry_levels:
+    - 0.382
+    - 0.500
+    - 0.618
+  
+  # Level tolerance (how close price needs to be to level)
+  level_tolerance_percent: ${FIBO_TOLERANCE:-0.1}
+
+# Entry Rules Configuration
+entry:
+  # Entry method
+  method: ${ENTRY_METHOD:-limit}  # market, limit, stop
+  
+  # Confirmation requirements
+  confirmation:
+    required: ${ENTRY_CONFIRMATION_REQUIRED:-true}
+    types:
+      - momentum
+      - candlestick
+      - volume
+  
+  # Entry timing
+  max_wait_bars: ${ENTRY_MAX_WAIT:-5}
+  
+  # Multiple entries
+  allow_multiple: ${ENTRY_ALLOW_MULTIPLE:-false}
+  max_entries_per_swing: ${ENTRY_MAX_PER_SWING:-1}
+
+# Exit Rules Configuration
+exit:
+  # Stop loss placement
+  stop_loss:
+    method: ${STOP_METHOD:-swing_point}  # swing_point, fixed_percent, atr
+    buffer_percent: ${STOP_BUFFER:-0.1}
+    trailing: ${STOP_TRAILING:-false}
+  
+  # Take profit targets
+  take_profit:
+    method: ${TP_METHOD:-fibonacci}  # fibonacci, fixed_ratio, atr
+    use_multiple_targets: ${TP_MULTIPLE:-true}
+    target_levels:
+      - 1.000
+      - 1.618
+    partial_close_percent: ${TP_PARTIAL:-50}
+
+# Market Filters Configuration
+filters:
+  # Session filters
+  sessions:
+    enabled: ${SESSION_FILTER_ENABLED:-true}
+    allowed_sessions:
+      - london
+      - new_york
+    avoid_overlaps: ${AVOID_SESSION_OVERLAPS:-false}
+  
+  # Volatility filters
+  volatility:
+    enabled: ${VOLATILITY_FILTER_ENABLED:-true}
+    min_atr_percent: ${MIN_ATR_PERCENT:-0.3}
+    max_atr_percent: ${MAX_ATR_PERCENT:-3.0}
+  
+  # Trend filters
+  trend:
+    enabled: ${TREND_FILTER_ENABLED:-true}
+    min_trend_strength: ${MIN_TREND_STRENGTH:-0.6}
+    higher_timeframe_confirmation: ${HTF_CONFIRMATION:-true}
+  
+  # News filters
+  news:
+    enabled: ${NEWS_FILTER_ENABLED:-true}
+    avoid_minutes_before: ${NEWS_AVOID_BEFORE:-30}
+    avoid_minutes_after: ${NEWS_AVOID_AFTER:-30}
+
+# Risk Management Configuration
+risk:
+  # Position sizing
+  position_sizing:
+    method: ${POSITION_SIZE_METHOD:-fixed_percent}  # fixed_percent, volatility_adjusted
+    risk_percent_per_trade: ${RISK_PERCENT:-1.0}
+    max_risk_percent_total: ${MAX_RISK_TOTAL:-6.0}
+  
+  # Correlation limits
+  correlation:
+    max_correlation: ${MAX_CORRELATION:-0.7}
+    correlation_period: ${CORRELATION_PERIOD:-20}
+  
+  # Drawdown limits
+  drawdown:
+    max_daily_drawdown: ${MAX_DAILY_DD:-3.0}
+    max_total_drawdown: ${MAX_TOTAL_DD:-10.0}
+
+# Timeframe Configuration
+timeframes:
+  # Analysis timeframe (for swing identification)
+  analysis: ${ANALYSIS_TIMEFRAME:-H4}
+  
+  # Entry timeframe (for precise entries)
+  entry: ${ENTRY_TIMEFRAME:-H1}
+  
+  # Higher timeframe for context
+  higher: ${HIGHER_TIMEFRAME:-D1}
+  
+  # Use multiple timeframes
+  multi_timeframe: ${MULTI_TIMEFRAME:-true}
+
+# Advanced Strategy Options
+advanced:
+  # Market structure analysis
+  market_structure:
+    enabled: ${MARKET_STRUCTURE_ENABLED:-true}
+    break_of_structure_confirmation: ${BOS_CONFIRMATION:-true}
+  
+  # Pattern recognition
+  patterns:
+    enabled: ${PATTERN_RECOGNITION_ENABLED:-true}
+    required_patterns:
+      - flag
+      - pennant
+      - triangle
+  
+  # Machine learning enhancements
+  ml_enhancement:
+    enabled: ${ML_ENHANCEMENT_ENABLED:-false}
+    model_confidence_threshold: ${ML_CONFIDENCE_THRESHOLD:-0.7}
+
+# NOTE: This template will be updated based on strategy requirements gathering
+# All parameters marked with ${} can be overridden with environment variables
