@@ -62,23 +62,37 @@ The strategy is based on Elliott Wave concepts, specifically:
 
 ---
 
-## Round 2: Fibonacci Application ✅ PARTIALLY COMPLETED
+## Round 2: Fibonacci Application ✅ COMPLETED
 
 ### Confirmed Details:
 
 #### Fibonacci Direction Logic ✅
 **Q: When you find dominant swing (UP), do you apply Fibonacci retracements from swing LOW to swing HIGH?**
-**A: YES - Apply Fibonacci from swing low to swing high, look for retracements to 38.2%, 50%, 61.8% levels, enter LONG on bounces (expecting Wave 5 up).**
+**A: YES - Apply Fibonacci from swing low to swing high, look for retracements to levels, enter LONG on bounces with confirmation (expecting Wave 5 up).**
 
-#### Entry Triggers 🔄 NEEDS ML DEVELOPMENT
-**Q: What triggers actual entry when price reaches Fibonacci level?**
-**A: Currently looking for candlestick patterns, but this is exactly why ML is needed - to find optimal entry triggers through data analysis.**
+#### Fibonacci Retracement Levels ✅
+**Q: Which specific Fibonacci retracement levels do you want to use?**
+**A: ALL LEVELS for testing optimization (23.6%, 38.2%, 50%, 61.8%, 78.6%). Usually best results between 38.2%-78.6%, but need testing capability for all levels.**
 
-### Questions Still Needed:
-- Specific Fibonacci retracement levels to use (23.6%, 38.2%, 50%, 61.8%, 78.6%?)
-- Extension levels for profit targets
-- Multiple entries or single entry per swing
-- Level tolerance (how close to exact level)
+#### Fibonacci Extension Levels ✅  
+**Q: Do you use Fibonacci extension levels for profit targets?**
+**A: YES - Test all extension levels (100%, 127.2%, 161.8%, 261.8%) to find optimal targets. Need testing capability for all levels.**
+
+#### Entry Strategy ✅
+**Q: Do you enter at multiple Fibonacci levels or focus on one preferred level?**
+**A: SINGLE TRADE ONLY. Look for confluence factors at Fibonacci levels (candlestick patterns, ABC corrections, etc.). Do NOT enter just because price touched level - need confirmation signals.**
+
+#### Level Tolerance ✅
+**Q: How close does price need to be to the exact Fibonacci level?**
+**A: CONFIGURABLE for testing optimization. Need to test different tolerance values to find optimal setting.**
+
+#### Trade Management ✅
+**Q: Multiple entries management?**
+**A: NO MULTIPLE ENTRIES. One trade at a time. System has two modes: "Trade Finding Mode" and "Trade Management Mode".**
+
+#### Setup Invalidation ✅
+**Q: When does Fibonacci setup become invalid?**
+**A: When price breaks below swing low (for upward swings) or above swing high (for downward swings). This means price not respecting Fibonacci retracement and likely new swings forming.**
 
 ---
 
@@ -117,7 +131,11 @@ The strategy is based on Elliott Wave concepts, specifically:
 - **Edge Case Handling**: Logic for same-price high/low scenarios
 - **Size-Based Comparison**: Measure swings in pips/points for dominance
 - **Fibonacci Calculation**: Apply from swing extremes in dominant direction
-- **ML Integration**: System must support training entry trigger models
+- **All Fibonacci Levels**: Support testing all retracement (23.6%-78.6%) and extension (100%-261.8%) levels
+- **Confluence Detection**: ML-based pattern recognition for entry confirmation
+- **Mode-Based Logic**: Separate "Trade Finding" and "Trade Management" modes
+- **Single Trade Management**: No multiple concurrent positions
+- **Setup Invalidation**: Monitor swing extreme breaks for setup invalidation
 
 ---
 
@@ -158,7 +176,7 @@ dominant_swing:
 ## Document Status
 
 - [x] Round 1: Core Mechanics - **COMPLETED** ✅
-- [x] Round 2: Fibonacci Application - **PARTIALLY COMPLETED** 🔄 
+- [x] Round 2: Fibonacci Application - **COMPLETED** ✅ 
 - [ ] Round 3: Trade Management - Pending  
 - [ ] Round 4: Filters & Context - Pending
 - [ ] Configuration Parameters - In Progress
