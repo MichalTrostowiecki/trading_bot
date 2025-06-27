@@ -14,8 +14,8 @@ import numpy as np
 from sqlalchemy.orm import Session
 
 from src.core.fractal_detection import FractalDetector, Fractal
-from src.data.mt5_interface import MT5Interface, get_mt5_data
-from src.utils.config import config
+from src.data.mt5_interface import MT5Interface, get_connection
+from src.utils.config import get_config
 from src.monitoring import get_logger
 
 logger = get_logger("trading_engine")
@@ -40,7 +40,7 @@ class TradeSignal(Enum):
 @dataclass
 class TradingParameters:
     """Trading parameters configuration."""
-    enabled_symbols: List[str] = field(default_factory=lambda: ["EURUSD", "GBPUSD"])
+    enabled_symbols: List[str] = field(default_factory=lambda: ["EURUSD"])
     timeframe: str = "M1"
     risk_per_trade: float = 0.01
     max_positions: int = 3
@@ -105,9 +105,17 @@ class TradingEngine:
     - Web dashboard integration
     """
     
-    def __init__(self, mt5_interface: MT5Interface):
+    def __init__(self, mt5_interface: Optional[MT5Interface]):
         self.mt5 = mt5_interface
-        self.fractal_detector = FractalDetector()
+        # Use more responsive fractal detection for real-time trading
+        from src.core.fractal_detection import FractalDetectionConfig
+        fractal_config = FractalDetectionConfig(
+            periods=3,  # Reduced from 5 to 3 for faster detection
+            min_strength_pips=0.0,  # No minimum strength requirement
+            handle_equal_prices=True,
+            require_closes_beyond=False
+        )
+        self.fractal_detector = FractalDetector(fractal_config)
         
         # Trading state
         self.state = TradingState.STOPPED
@@ -135,9 +143,33 @@ class TradingEngine:
     async def start(self) -> bool:
         """Start the trading engine."""
         try:
-            if not await self.mt5.connect():
+            if not self.mt5:
+                logger.error("MT5 interface not available - cannot start trading")
+                return False
+            
+            if not self.mt5.connect():
                 logger.error("Failed to connect to MT5")
                 return False
+            
+            # Initialize symbols and verify they're available
+            import MetaTrader5 as mt5
+            import time
+            
+            for symbol in self.parameters.enabled_symbols:
+                # Select symbol and wait for it to load
+                if not mt5.symbol_select(symbol, True):
+                    logger.warning(f"Could not select symbol {symbol}")
+                    continue
+                
+                # Wait a moment for symbol to initialize
+                time.sleep(0.2)
+                
+                # Verify we can get tick data
+                tick = mt5.symbol_info_tick(symbol)
+                if tick:
+                    logger.info(f"✅ Symbol {symbol} ready: bid={tick.bid}, ask={tick.ask}")
+                else:
+                    logger.warning(f"⚠️ Symbol {symbol} selected but no tick data yet")
             
             # Initialize trading sessions
             for symbol in self.parameters.enabled_symbols:
@@ -167,7 +199,7 @@ class TradingEngine:
             if hasattr(self, '_close_all_on_stop') and self._close_all_on_stop:
                 await self.close_all_positions()
             
-            await self.mt5.disconnect()
+            self.mt5.disconnect()
             logger.info("Trading engine stopped successfully")
             return True
             
@@ -240,8 +272,8 @@ class TradingEngine:
                     # Update existing positions
                     await self._update_positions(symbol)
                 
-                # Sleep between iterations
-                await asyncio.sleep(1)  # 1-second intervals
+                # Sleep between iterations - reduced for more responsive fractal detection
+                await asyncio.sleep(2)  # 2-second intervals for better responsiveness
                 
             except Exception as e:
                 logger.error(f"Error in trading loop: {e}")
@@ -251,14 +283,27 @@ class TradingEngine:
         """Update market data for symbol."""
         try:
             # Get recent data (last 200 bars for analysis)
-            data = await get_mt5_data(
-                symbol=symbol,
-                timeframe=self.parameters.timeframe,
-                count=200
-            )
+            connection = get_connection()
+            if connection:
+                from src.data.mt5_interface import TimeFrame
+                timeframe = TimeFrame.M1  # Use M1 for real-time analysis
+                data = connection.get_rates(symbol, timeframe, 200)
+            else:
+                data = None
             
             if data is not None and not data.empty:
+                # Check if we have new data
+                old_data_len = len(self.market_data.get(symbol, []))
+                new_data_len = len(data)
+                
+                if new_data_len != old_data_len:
+                    logger.info(f"📈 Market data updated for {symbol}: {old_data_len} → {new_data_len} bars")
+                    latest_candle = data.iloc[-1]
+                    logger.debug(f"Latest candle: O:{latest_candle['Open']:.5f} H:{latest_candle['High']:.5f} L:{latest_candle['Low']:.5f} C:{latest_candle['Close']:.5f}")
+                
                 self.market_data[symbol] = data
+            else:
+                logger.warning(f"No market data received for {symbol}")
             
         except Exception as e:
             logger.error(f"Failed to update market data for {symbol}: {e}")
@@ -270,18 +315,30 @@ class TradingEngine:
                 return
             
             data = self.market_data[symbol]
+            logger.debug(f"Analyzing market structure for {symbol}: {len(data)} bars available")
             
             # Detect fractals
-            fractals = self.fractal_detector.detect_fractals(
-                data, 
-                periods=self.parameters.fractal_periods
-            )
+            fractals = self.fractal_detector.detect_fractals(data)
+            
+            # Log fractal detection results
+            old_fractal_count = len(self.fractals_cache.get(symbol, []))
+            new_fractal_count = len(fractals)
+            
+            if new_fractal_count != old_fractal_count:
+                logger.info(f"📊 Fractals updated for {symbol}: {old_fractal_count} → {new_fractal_count}")
+                if fractals:
+                    latest_fractal = fractals[-1]
+                    logger.info(f"Latest fractal: {latest_fractal.type.value} at {latest_fractal.price:.5f} ({latest_fractal.timestamp})")
+            
             self.fractals_cache[symbol] = fractals
             
             # Calculate Fibonacci levels if we have fractals
             if len(fractals) >= 2:
                 fibonacci_levels = self._calculate_fibonacci_levels(data, fractals)
                 self.fibonacci_levels_cache[symbol] = fibonacci_levels
+                logger.debug(f"Fibonacci levels calculated: {len(fibonacci_levels.get('retracements', {}))} retracements")
+            else:
+                logger.debug(f"Not enough fractals for Fibonacci calculation: {len(fractals)}")
             
         except Exception as e:
             logger.error(f"Failed to analyze market structure for {symbol}: {e}")
@@ -289,13 +346,15 @@ class TradingEngine:
     def _calculate_fibonacci_levels(self, data: pd.DataFrame, fractals: List[Fractal]) -> Dict:
         """Calculate Fibonacci retracement and extension levels."""
         try:
-            # Find the most recent swing (last two fractals)
             if len(fractals) < 2:
                 return {}
             
-            # Get the dominant swing
-            swing_start = fractals[-2]
-            swing_end = fractals[-1]
+            # Find the dominant swing (largest swing among recent fractals)
+            dominant_swing = self._find_dominant_swing(fractals)
+            if not dominant_swing:
+                return {}
+            
+            swing_start, swing_end = dominant_swing
             
             # Determine swing direction
             if swing_end.price > swing_start.price:
@@ -360,7 +419,7 @@ class TradingEngine:
             if not fibonacci_data:
                 return TradeSignal.NONE
             
-            current_price = self.market_data[symbol]['close'].iloc[-1]
+            current_price = self.market_data[symbol]['Close'].iloc[-1]
             swing_direction = fibonacci_data["swing_direction"]
             retracements = fibonacci_data["retracements"]
             
@@ -400,25 +459,29 @@ class TradingEngine:
             if any(pos.symbol == symbol for pos in self.positions.values()):
                 return
             
+            # Quick check if symbol has prices before attempting trade
+            import MetaTrader5 as mt5
+            tick = mt5.symbol_info_tick(symbol)
+            if not tick:
+                logger.debug(f"No tick data for {symbol}, skipping trade")
+                return
+            
             # Calculate position size
             volume = self._calculate_position_size(symbol)
             if volume <= 0:
                 return
             
             # Get current price
-            current_price = self.market_data[symbol]['close'].iloc[-1]
+            current_price = self.market_data[symbol]['Close'].iloc[-1]
             
             # Calculate stop loss and take profit
-            stop_loss, take_profit = self._calculate_stop_take_profit(
-                symbol, signal, current_price
-            )
+            stop_loss, take_profit = self._calculate_stop_take_profit(symbol, signal, current_price)
             
-            # Execute the trade
-            ticket = await self.mt5.place_order(
+            # Execute market order with risk management
+            ticket = self.mt5.place_order(
                 symbol=symbol,
                 order_type="buy" if signal == TradeSignal.BUY else "sell",
                 volume=volume,
-                price=current_price,
                 stop_loss=stop_loss,
                 take_profit=take_profit
             )
@@ -457,11 +520,11 @@ class TradingEngine:
             if not account_info:
                 return 0.0
             
-            balance = account_info.balance
+            balance = account_info['balance'] if isinstance(account_info, dict) else account_info.balance
             risk_amount = balance * self.parameters.risk_per_trade
             
             # Calculate position size based on stop loss
-            current_price = self.market_data[symbol]['close'].iloc[-1]
+            current_price = self.market_data[symbol]['Close'].iloc[-1]
             stop_distance = self.parameters.stop_buffer_pips * 0.0001  # Convert pips to price
             
             if stop_distance > 0:
@@ -475,7 +538,7 @@ class TradingEngine:
                 
                 return max(min_lot, min(position_size, max_lot))
             
-            return 0.01  # Default minimum lot size
+            return 0.01  # Default minimum lot size (0.01 = micro lot)
             
         except Exception as e:
             logger.error(f"Failed to calculate position size: {e}")
@@ -546,11 +609,57 @@ class TradingEngine:
             logger.error(f"Failed to get nearest Fibonacci level: {e}")
             return None
     
+    def _find_dominant_swing(self, fractals: List[Fractal]) -> Optional[Tuple[Fractal, Fractal]]:
+        """Find the dominant (largest) swing among recent fractals."""
+        try:
+            if len(fractals) < 2:
+                return None
+            
+            # Look at the last 8 fractals (or all if fewer) to find dominant swing
+            recent_fractals = fractals[-8:] if len(fractals) >= 8 else fractals
+            
+            largest_swing = None
+            largest_range = 0.0
+            
+            # Check all consecutive pairs to find the largest swing
+            for i in range(len(recent_fractals) - 1):
+                start_fractal = recent_fractals[i]
+                end_fractal = recent_fractals[i + 1]
+                
+                # Calculate swing range
+                swing_range = abs(end_fractal.price - start_fractal.price)
+                
+                # Keep track of the largest swing
+                if swing_range > largest_range:
+                    largest_range = swing_range
+                    largest_swing = (start_fractal, end_fractal)
+            
+            # Only change dominant swing if new swing is significantly larger (10% more)
+            if hasattr(self, '_current_dominant_swing') and self._current_dominant_swing:
+                current_start, current_end = self._current_dominant_swing
+                current_range = abs(current_end.price - current_start.price)
+                
+                # Require new swing to be at least 10% larger to become dominant
+                if largest_range < current_range * 1.1:
+                    logger.debug(f"Keeping existing dominant swing: {current_range:.5f} vs new {largest_range:.5f}")
+                    return self._current_dominant_swing
+            
+            # Update current dominant swing
+            if largest_swing:
+                self._current_dominant_swing = largest_swing
+                logger.info(f"New dominant swing: {largest_swing[0].type.value} at {largest_swing[0].price:.5f} → {largest_swing[1].type.value} at {largest_swing[1].price:.5f} (range: {largest_range:.5f})")
+            
+            return largest_swing
+            
+        except Exception as e:
+            logger.error(f"Failed to find dominant swing: {e}")
+            return None
+    
     async def _update_positions(self, symbol: str):
         """Update existing positions for symbol."""
         try:
             # Get current positions from MT5
-            mt5_positions = await self.mt5.get_positions(symbol)
+            mt5_positions = self.mt5.get_positions(symbol)
             
             # Update our position records
             for ticket, position in list(self.positions.items()):
@@ -582,7 +691,7 @@ class TradingEngine:
         try:
             success = True
             for ticket, position in list(self.positions.items()):
-                if await self.mt5.close_position(position.ticket):
+                if self.mt5.close_position(position.ticket):
                     logger.info(f"Closed position: {position.symbol} ticket {position.ticket}")
                     del self.positions[ticket]
                 else:
@@ -602,7 +711,7 @@ class TradingEngine:
             if not account_info:
                 return False
             
-            balance = account_info.balance
+            balance = account_info['balance'] if isinstance(account_info, dict) else account_info.balance
             max_loss = balance * self.parameters.max_daily_loss
             
             return self.daily_pnl < -max_loss
@@ -672,7 +781,7 @@ def get_trading_engine() -> Optional[TradingEngine]:
     return trading_engine
 
 
-async def initialize_trading_engine(mt5_interface: MT5Interface) -> TradingEngine:
+def initialize_trading_engine(mt5_interface: Optional[MT5Interface]) -> TradingEngine:
     """Initialize the global trading engine."""
     global trading_engine
     trading_engine = TradingEngine(mt5_interface)

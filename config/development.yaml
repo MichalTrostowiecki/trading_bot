@@ -1,127 +1,48 @@
-# Development Configuration for Fibonacci Trading Bot
-# Based on strategy requirements and MT5 demo account
-
-environment: development
-
-# MT5 Configuration
-mt5:
-  server: "BlueberryMarkets-Demo"
-  login: 12605399
-  password: "gY81bI*L"
-  timeout: 10000
-
-# Data Configuration
+api:
+  debug: true
+  host: localhost
+  port: 8000
 data:
-  symbols:
-    - "DJ30"  # Primary test symbol
-    - "EURUSD"
-    - "GBPUSD"
-    - "USDJPY"
-  timeframes:
-    - "M1"
-    - "M5"
-    - "M15"
-    - "H1"
-  history_days: 90  # 3 months available
   cache_enabled: true
   cache_ttl: 3600
-
-# Strategy Parameters (Based on Requirements)
-strategy:
-  # Fractal Detection
-  fractals:
-    periods: 5  # Configurable for testing
-    min_distance: 1  # No minimum distance required
-    handle_equal_prices: true  # Handle same high/low edge cases
-  
-  # Swing Analysis
-  swings:
-    lookback_periods: 140  # Configurable for testing
-    min_size_percent: 0.0  # No minimum size initially
-    size_only_dominance: true  # Only size matters for dominance
-  
-  # Fibonacci Levels
-  fibonacci:
-    retracement_levels:
-      - 0.236
-      - 0.382
-      - 0.500
-      - 0.618
-      - 0.786
-    extension_levels:
-      - 1.000
-      - 1.272
-      - 1.618
-      - 2.618
-    tolerance_percent: 0.1  # Configurable for testing
-  
-  # Entry Rules
-  entry:
-    confluence_required: true
-    single_trade_only: true
-    max_wait_bars: 5
-  
-  # Exit Rules
-  exit:
-    stop_loss:
-      method: "signal_bar"
-      buffer_pips: 2
-      spread_adjustment: true  # Add spread for shorts
-    take_profit:
-      method: "fibonacci_extensions"
-      multiple_targets: true
-  
-  # Risk Management
-  risk:
-    position_size_percent: 1.0  # 1% risk per trade
-    max_concurrent_trades: 1
-
-# Trading Configuration
-trading:
-  risk_per_trade: 0.01  # 1%
-  max_positions: 1
-  max_daily_loss: 0.03  # 3%
-  fibonacci_levels:
-    retracements: [0.236, 0.382, 0.500, 0.618, 0.786]
-    extensions: [1.000, 1.272, 1.618, 2.618]
-
-# Machine Learning Configuration
-ml:
-  model_retrain_days: 30
-  feature_lookback: 100
-  validation_split: 0.2
-  random_state: 42
-
-# Logging Configuration
-logging:
-  level: "DEBUG"  # Detailed logging for development
-  file: "data/logs/trading_bot.log"
-  max_size: "100MB"
-  backup_count: 5
-
-# Database Configuration (SQLite for development)
+  history_days: 365
+  symbols:
+  - EURUSD
+  timeframes:
+  - M1
+  - M5
 database:
-  url: "sqlite:///data/trading_bot_dev.db"
   echo: false
-
-# API Configuration
-api:
-  host: "localhost"
-  port: 8000
-  debug: true
-
-# Testing Configuration
-testing:
-  # Visual chart configuration
-  charts:
-    show_fractals: true
-    show_swings: true
-    show_fibonacci: true
-    show_dominant_swing: true
-    update_real_time: false  # Static for development
-  
-  # Parameter testing ranges
-  parameter_ranges:
-    fractal_periods: [3, 5, 7, 9]
-    lookback_periods: [50, 100, 140, 200]
-    fibonacci_tolerance: [0.05, 0.1, 0.2, 0.5]
+  url: sqlite:///data/trading_bot.db
+environment: development
+logging:
+  backup_count: 5
+  file: logs/trading_bot.log
+  level: INFO
+  max_size: 100MB
+ml:
+  feature_lookback: 100
+  model_retrain_days: 30
+  random_state: 42
+  validation_split: 0.2
+mt5:
+  login: 12605399
+  password: gY81bI*L
+  server: BlueberryMarkets-Demo
+  timeout: 10000
+trading:
+  fibonacci_levels:
+    extensions:
+    - 1.0
+    - 1.272
+    - 1.618
+    - 2.0
+    retracements:
+    - 0.236
+    - 0.382
+    - 0.5
+    - 0.618
+    - 0.786
+  max_daily_loss: 0.05
+  max_positions: 3
+  risk_per_trade: 0.01

@@ -269,10 +269,33 @@ class HistoricalDataCollector:
     """Historical data collection and management system."""
     
     def __init__(self, config: Optional[DataConfig] = None, storage: Optional[DataStorage] = None):
-        self.config = config or get_config().data
+        self._custom_config = config
+        self._config = None
         self.storage = storage or FileStorage(str(Path("data/historical")))
         self.mt5_interface: Optional[MT5Interface] = None
         self.max_workers = 4
+    
+    @property
+    def config(self):
+        """Lazy-load configuration."""
+        if self._config is None:
+            if self._custom_config:
+                self._config = self._custom_config
+            else:
+                try:
+                    self._config = get_config().data
+                except RuntimeError:
+                    # Fallback to default config if not loaded yet
+                    logger.warning("Configuration not loaded, using default data config")
+                    self._config = {
+                        'symbols': ['EURUSD', 'GBPUSD'],
+                        'timeframes': ['M1', 'M5'],
+                        'history_days': 365,
+                        'cache_enabled': True,
+                        'cache_ttl': 3600
+                    }
+        return self._config
+        
         self._collection_stats = {
             'symbols_processed': 0,
             'records_collected': 0,
@@ -547,14 +570,18 @@ class HistoricalDataCollector:
         return self.storage.list_stored_data()
 
 
-# Global historical data collector instance
-historical_collector = HistoricalDataCollector()
+# Global historical data collector instance (lazy initialization)
+historical_collector = None
 
 # Convenience functions
 def collect_historical_data(symbols: Optional[List[str]] = None,
                            timeframes: Optional[List[TimeFrame]] = None,
                            days_back: Optional[int] = None) -> Dict[str, Dict[str, bool]]:
     """Collect historical data for specified symbols and timeframes."""
+    global historical_collector
+    if historical_collector is None:
+        historical_collector = HistoricalDataCollector()
+    
     if symbols:
         # Temporarily update config
         original_symbols = historical_collector.config.symbols
@@ -569,4 +596,7 @@ def get_historical_data(symbol: str, timeframe: TimeFrame,
                        start_date: Optional[datetime] = None,
                        end_date: Optional[datetime] = None) -> Optional[pd.DataFrame]:
     """Get historical data for a symbol and timeframe."""
+    global historical_collector
+    if historical_collector is None:
+        historical_collector = HistoricalDataCollector()
     return historical_collector.get_data(symbol, timeframe, start_date, end_date)

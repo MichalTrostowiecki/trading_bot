@@ -200,7 +200,8 @@ class RealTimeDataStream:
     """Real-time data streaming manager."""
     
     def __init__(self, config: Optional[DataConfig] = None):
-        self.config = config or get_config().data
+        self._custom_config = config
+        self._config = None
         self.mt5_interface: Optional[MT5Interface] = None
         self.subscriptions: Dict[str, DataSubscription] = {}
         self.status = StreamStatus.STOPPED
@@ -488,9 +489,36 @@ class MarketDataManager:
     """High-level market data manager combining historical and real-time data."""
     
     def __init__(self, config: Optional[DataConfig] = None):
-        self.config = config or get_config().data
-        self.realtime_stream = RealTimeDataStream(config)
+        self._custom_config = config
+        self._config = None
+        self.realtime_stream = None  # Initialize later
         self.symbol_callbacks: Dict[str, List[Callable]] = {}
+    
+    @property
+    def config(self):
+        """Lazy-load configuration."""
+        if self._config is None:
+            if self._custom_config:
+                self._config = self._custom_config
+            else:
+                try:
+                    self._config = get_config().data
+                except RuntimeError:
+                    # Fallback to default config if not loaded yet
+                    logger.warning("Configuration not loaded, using default data config")
+                    self._config = {
+                        'symbols': ['EURUSD', 'GBPUSD'],
+                        'timeframes': ['M1', 'M5'],
+                        'history_days': 365,
+                        'cache_enabled': True,
+                        'cache_ttl': 3600
+                    }
+        return self._config
+    
+    def _ensure_stream(self):
+        """Ensure realtime stream is initialized."""
+        if self.realtime_stream is None:
+            self.realtime_stream = RealTimeDataStream(self.config)
         
     def subscribe_symbol(self, symbol: str, callback: Optional[Callable[[Tick], None]] = None) -> bool:
         """Subscribe to real-time data for a symbol."""
@@ -543,26 +571,41 @@ class MarketDataManager:
         return self.realtime_stream.get_status()
 
 
-# Global market data manager instance
-market_data_manager = MarketDataManager()
+# Global market data manager instance (lazy initialization)
+market_data_manager = None
 
 # Convenience functions
 def subscribe_to_symbol(symbol: str, callback: Optional[Callable[[Tick], None]] = None) -> bool:
     """Subscribe to real-time data for a symbol."""
+    global market_data_manager
+    if market_data_manager is None:
+        market_data_manager = MarketDataManager()
     return market_data_manager.subscribe_symbol(symbol, callback)
 
 def unsubscribe_from_symbol(symbol: str) -> bool:
     """Unsubscribe from real-time data for a symbol."""
+    global market_data_manager
+    if market_data_manager is None:
+        market_data_manager = MarketDataManager()
     return market_data_manager.unsubscribe_symbol(symbol)
 
 def get_current_quote(symbol: str) -> Optional[Quote]:
     """Get current quote for a symbol."""
+    global market_data_manager
+    if market_data_manager is None:
+        market_data_manager = MarketDataManager()
     return market_data_manager.get_live_quote(symbol)
 
 def start_market_data_stream() -> bool:
     """Start the global market data stream."""
+    global market_data_manager
+    if market_data_manager is None:
+        market_data_manager = MarketDataManager()
     return market_data_manager.start_streaming()
 
 def stop_market_data_stream() -> bool:
     """Stop the global market data stream."""
-    return market_data_manager.stop_streaming()
+    global market_data_manager
+    if market_data_manager is not None:
+        return market_data_manager.stop_streaming()
+    return True

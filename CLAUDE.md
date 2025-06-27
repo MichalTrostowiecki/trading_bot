@@ -64,3 +64,6 @@ When working on this project:
 6. Use the dependency matrix for installation order
 7. Reference the git workflow guide for procedures
 8. **For strategy implementation**: Must follow exact specifications from requirements doc
+
+### Development Environment
+- Remember that I work on windows but use WSL only to communicate with Claude

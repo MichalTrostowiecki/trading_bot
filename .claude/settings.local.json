@@ -12,7 +12,13 @@
       "Bash(sudo apt install:*)",
       "Bash(rm:*)",
       "Bash(source:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(curl:*)",
+      "Bash(~/.local/bin/pip3 install:*)",
+      "Bash(PATH=$PATH:~/.local/bin python3 main.py)",
+      "Bash(PATH=$PATH:~/.local/bin pip3 install -r requirements-core.txt)",
+      "Bash(PATH=$PATH:~/.local/bin pip3 install loguru)",
+      "Bash(PATH=$PATH:~/.local/bin pip3 install MetaTrader5)"
     ],
     "deny": []
   }

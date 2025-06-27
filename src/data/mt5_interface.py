@@ -10,7 +10,36 @@ from typing import Dict, List, Optional, Tuple, Any, Union
 from dataclasses import dataclass
 from enum import Enum
 import pandas as pd
-import MetaTrader5 as mt5
+import numpy as np
+
+# Try to import MetaTrader5, fallback to mock if not available (for testing)
+try:
+    import MetaTrader5 as mt5
+    MT5_AVAILABLE = True
+except ImportError:
+    # Simple mock for environments where MT5 isn't available
+    class MockMT5:
+        TIMEFRAME_M1 = 1
+        TIMEFRAME_M5 = 5
+        TIMEFRAME_M15 = 15
+        TIMEFRAME_M30 = 30
+        TIMEFRAME_H1 = 60
+        TIMEFRAME_H4 = 240
+        TIMEFRAME_D1 = 1440
+        TIMEFRAME_W1 = 10080
+        TIMEFRAME_MN1 = 43200
+        ORDER_TYPE_BUY = 0
+        ORDER_TYPE_SELL = 1
+        
+        def initialize(self): return False  # Will fail gracefully
+        def shutdown(self): return True
+        def login(self, *args, **kwargs): return False
+        def account_info(self): return None
+        def last_error(self): return "MT5 not available on this platform"
+    
+    mt5 = MockMT5()
+    MT5_AVAILABLE = False
+
 from src.utils.config import get_config, MT5Config
 from src.monitoring import get_logger
 
@@ -416,6 +445,268 @@ class MT5Interface:
             logger.error(f"Error getting account info: {e}")
             return None
     
+    def get_available_symbols(self) -> List[str]:
+        """Get list of available symbols."""
+        if not self.is_alive():
+            return []
+        
+        try:
+            symbols = mt5.symbols_get()
+            if symbols is None:
+                return []
+            
+            # Return just the symbol names
+            symbol_names = [s.name for s in symbols]
+            logger.info(f"Found {len(symbol_names)} available symbols")
+            
+            # Log forex symbols for debugging
+            forex_symbols = [s for s in symbol_names if any(pair in s.upper() for pair in ['EUR', 'GBP', 'USD', 'AUD', 'JPY'])]
+            logger.info(f"Forex symbols found: {forex_symbols[:20]}")  # Log first 20
+            
+            return symbol_names
+            
+        except Exception as e:
+            logger.error(f"Error getting symbols: {e}")
+            return []
+    
+    def get_positions(self, symbol: str = None) -> List:
+        """Get current open positions."""
+        if not self.is_alive():
+            logger.warning("Cannot get positions - not connected to MT5")
+            return []
+        
+        try:
+            if symbol:
+                positions = mt5.positions_get(symbol=symbol)
+            else:
+                positions = mt5.positions_get()
+            
+            if positions is None:
+                return []
+            
+            return list(positions)
+            
+        except Exception as e:
+            logger.error(f"Error getting positions: {e}")
+            return []
+    
+    def place_order(self, symbol: str, order_type: str, volume: float, 
+                   price: float = None, stop_loss: float = None, 
+                   take_profit: float = None) -> Optional[int]:
+        """Place a trading order."""
+        if not self.is_alive():
+            logger.warning("Cannot place order - not connected to MT5")
+            return None
+        
+        try:
+            # Ensure symbol is selected and available
+            if not mt5.symbol_select(symbol, True):
+                logger.error(f"Failed to select symbol {symbol}")
+                return None
+            
+            # Wait a moment for symbol to load
+            import time
+            time.sleep(0.2)  # Longer wait for symbol initialization
+            
+            # Get symbol info first
+            symbol_info = mt5.symbol_info(symbol)
+            if symbol_info is None:
+                logger.error(f"Symbol {symbol} not found")
+                return None
+            
+            if not symbol_info.visible:
+                logger.error(f"Symbol {symbol} not visible in Market Watch")
+                return None
+            
+            # Validate minimum volume
+            if volume < symbol_info.volume_min:
+                logger.error(f"Volume {volume} below minimum {symbol_info.volume_min}")
+                return None
+            
+            if volume > symbol_info.volume_max:
+                logger.error(f"Volume {volume} above maximum {symbol_info.volume_max}")
+                return None
+            
+            # Round volume to volume step
+            volume_step = symbol_info.volume_step
+            volume = round(volume / volume_step) * volume_step
+            
+            # Get current prices with retry
+            tick = None
+            for i in range(5):  # Try 5 times
+                tick = mt5.symbol_info_tick(symbol)
+                if tick is not None and tick.bid > 0 and tick.ask > 0:
+                    break
+                time.sleep(0.1)
+            
+            if tick is None or tick.bid <= 0 or tick.ask <= 0:
+                logger.error(f"No valid tick data for {symbol} after retries")
+                return None
+            
+            logger.debug(f"Symbol {symbol}: bid={tick.bid}, ask={tick.ask}, spread={tick.ask-tick.bid:.5f}")
+            
+            # Check if market is open
+            if abs(tick.ask - tick.bid) > 0.01:  # Abnormally wide spread
+                logger.warning(f"Wide spread detected for {symbol}: {tick.ask-tick.bid:.5f}")
+            
+            # Store the current price for logging and order
+            current_price = tick.ask if order_type.lower() == "buy" else tick.bid
+            
+            # Prepare market order request with current price
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL,
+                "symbol": symbol,
+                "volume": volume,
+                "type": mt5.ORDER_TYPE_BUY if order_type.lower() == "buy" else mt5.ORDER_TYPE_SELL,
+                "price": current_price,  # Add current price for market orders
+                "deviation": 50,  # Increased deviation for better execution
+                "magic": 234000,
+                "comment": "Fibonacci Bot",
+                "type_filling": mt5.ORDER_FILLING_FOK,  # Fill or Kill for market orders
+                "type_time": mt5.ORDER_TIME_GTC,
+            }
+            
+            # Add stop loss and take profit if provided
+            if stop_loss and stop_loss > 0:
+                request["sl"] = round(stop_loss, 5)
+            if take_profit and take_profit > 0:
+                request["tp"] = round(take_profit, 5)
+            
+            # Log the request for debugging
+            logger.info(f"Attempting order: {order_type.upper()} {volume} {symbol} at {current_price}")
+            logger.debug(f"Full request: {request}")
+            logger.debug(f"Symbol info: min_vol={symbol_info.volume_min}, max_vol={symbol_info.volume_max}, step={symbol_info.volume_step}")
+            logger.debug(f"Current tick: bid={tick.bid}, ask={tick.ask}, spread={tick.ask-tick.bid:.5f}")
+            
+            # Send order
+            result = mt5.order_send(request)
+            
+            if result is None:
+                error_msg = f"Order send failed: {mt5.last_error()}"
+                logger.error(error_msg)
+                return None
+            
+            logger.debug(f"Order result: retcode={result.retcode}, comment='{result.comment}', request_id={result.request_id}")
+            
+            if result.retcode != mt5.TRADE_RETCODE_DONE:
+                # Try with different filling policy if FOK failed
+                if result.retcode == mt5.TRADE_RETCODE_INVALID_FILL:
+                    logger.warning("FOK filling failed, trying IOC filling")
+                    request["type_filling"] = mt5.ORDER_FILLING_IOC
+                    result = mt5.order_send(request)
+                    
+                    if result is None:
+                        logger.error(f"Order send failed (IOC): {mt5.last_error()}")
+                        return None
+                    
+                    if result.retcode != mt5.TRADE_RETCODE_DONE:
+                        logger.error(f"Order failed (IOC): {result.retcode} - {result.comment}")
+                        return None
+                # Try without specifying price for market orders (let MT5 handle it)
+                elif result.retcode == 10015:  # Invalid price
+                    logger.warning("Invalid price error, trying market order without price")
+                    request_no_price = request.copy()
+                    del request_no_price["price"]  # Remove price for pure market order
+                    result = mt5.order_send(request_no_price)
+                    
+                    if result is None:
+                        logger.error(f"Order send failed (no price): {mt5.last_error()}")
+                        return None
+                    
+                    if result.retcode != mt5.TRADE_RETCODE_DONE:
+                        logger.error(f"Order failed (no price): {result.retcode} - {result.comment}")
+                        logger.error(f"Failed request details: {request_no_price}")
+                        return None
+                else:
+                    logger.error(f"Order failed: {result.retcode} - {result.comment}")
+                    logger.debug(f"Failed request: {request}")
+                    # Try to get more info about the error
+                    error_desc = {
+                        10004: "Requote",
+                        10006: "Request rejected", 
+                        10007: "Request canceled",
+                        10008: "Order placed",
+                        10009: "Request completed",
+                        10010: "Only part of the request was completed",
+                        10011: "Request processing error",
+                        10012: "Request canceled by timeout",
+                        10013: "Invalid request",
+                        10014: "Invalid volume in the request",
+                        10015: "Invalid price in the request",
+                        10016: "Invalid stops in the request",
+                        10017: "Trade is disabled",
+                        10018: "Market is closed",
+                        10019: "There is not enough money to complete the request",
+                        10020: "Prices changed",
+                        10021: "There are no quotes to process the request",
+                        10022: "Invalid order expiration date in the request",
+                        10023: "Order state changed",
+                        10024: "Too frequent requests",
+                        10025: "No changes in request",
+                        10026: "Autotrading disabled by server",
+                        10027: "Autotrading disabled by client terminal",
+                        10028: "Request locked for processing",
+                        10029: "Order or position frozen",
+                        10030: "Invalid order filling type",
+                    }
+                    error_msg = error_desc.get(result.retcode, "Unknown error")
+                    logger.error(f"Error {result.retcode}: {error_msg}")
+                    return None
+            
+            logger.info(f"✅ Order placed successfully: {order_type.upper()} {volume} {symbol} at {current_price}")
+            return result.order
+            
+        except Exception as e:
+            logger.error(f"Error placing order: {e}")
+            return None
+    
+    def close_position(self, ticket: int) -> bool:
+        """Close a position by ticket number."""
+        if not self.is_alive():
+            logger.warning("Cannot close position - not connected to MT5")
+            return False
+        
+        try:
+            # Get position info
+            positions = mt5.positions_get(ticket=ticket)
+            if not positions:
+                logger.warning(f"Position {ticket} not found")
+                return False
+            
+            position = positions[0]
+            
+            # Prepare close request
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL,
+                "symbol": position.symbol,
+                "volume": position.volume,
+                "type": mt5.ORDER_TYPE_SELL if position.type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY,
+                "position": ticket,
+                "deviation": 20,
+                "magic": 234000,
+                "comment": "Close by Fibonacci Bot",
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": mt5.ORDER_FILLING_IOC,
+            }
+            
+            # Send close order
+            result = mt5.order_send(request)
+            
+            if result is None:
+                logger.error(f"Close order failed: {mt5.last_error()}")
+                return False
+            
+            if result.retcode != mt5.TRADE_RETCODE_DONE:
+                logger.error(f"Close failed: {result.retcode} - {result.comment}")
+                return False
+            
+            logger.info(f"Position {ticket} closed successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error closing position {ticket}: {e}")
+            return False
+    
     def __enter__(self):
         """Context manager entry."""
         self.connect()
@@ -438,6 +729,8 @@ class MT5ConnectionManager:
         self._lock = threading.RLock()
         self.auto_reconnect = True
         self.reconnect_interval = 30  # seconds
+        self._monitor_thread = None
+        self._stop_monitoring = False
     
     @property
     def config(self):

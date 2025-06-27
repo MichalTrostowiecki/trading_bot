@@ -15,7 +15,7 @@ import uuid
 import json
 import pandas as pd
 
-from src.utils.config import config
+from src.utils.config import get_config
 from src.monitoring import get_logger
 
 logger = get_logger("database")
@@ -186,18 +186,36 @@ class DatabaseManager:
     """Database manager for trading bot data operations."""
     
     def __init__(self, database_url: str = None):
-        self.database_url = database_url or config.database.url
+        self.database_url = database_url or self._get_database_url()
         self.engine = None
         self.SessionLocal = None
         
         logger.info("Database manager initialized")
+    
+    def _get_database_url(self) -> str:
+        """Get database URL from configuration."""
+        try:
+            config = get_config()
+            return config.database.url
+        except Exception as e:
+            logger.warning(f"Could not load database URL from config: {e}")
+            return "sqlite:///data/trading_bot.db"
+    
+    def _get_database_echo(self) -> bool:
+        """Get database echo setting from configuration."""
+        try:
+            config = get_config()
+            return config.database.echo
+        except Exception as e:
+            logger.warning(f"Could not load database echo setting from config: {e}")
+            return False
     
     def connect(self) -> bool:
         """Connect to the database."""
         try:
             self.engine = create_engine(
                 self.database_url,
-                echo=config.database.echo,
+                echo=self._get_database_echo(),
                 pool_pre_ping=True,
                 pool_recycle=3600
             )

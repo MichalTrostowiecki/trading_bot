@@ -11,7 +11,7 @@ from typing import Optional
 import uvicorn
 
 from src.utils.config import ConfigManager, get_config
-from src.data.mt5_interface import MT5Interface, initialize_mt5_interface
+from src.data.mt5_interface import MT5Interface, initialize_mt5
 from src.execution.trading_engine import initialize_trading_engine, get_trading_engine
 from src.monitoring.web_dashboard import app as dashboard_app
 from src.data.database import initialize_database, get_database_manager
@@ -60,26 +60,46 @@ class TradingBotApplication:
                 logger.error("Failed to initialize database")
                 return False
             
-            # Initialize MT5 interface
+            # Initialize MT5 interface (handle gracefully if not available)
             logger.info("Initializing MT5 interface...")
-            self.mt5_interface = await initialize_mt5_interface()
-            if not self.mt5_interface:
-                logger.error("Failed to initialize MT5 interface")
-                return False
+            mt5_available = initialize_mt5()
+            if mt5_available:
+                # Create MT5 interface instance
+                self.mt5_interface = MT5Interface()
+                if self.mt5_interface.connect():
+                    logger.info("MT5 connection established successfully")
+                else:
+                    logger.warning("Failed to connect to MT5 - running in demo mode")
+                    self.mt5_interface = None
+            else:
+                logger.warning("MT5 not available on this platform - running in demo mode")
+                logger.info("Note: MT5 functionality requires Windows environment")
+                self.mt5_interface = None
             
-            # Test MT5 connection
-            if not await self.mt5_interface.connect():
-                logger.error("Failed to connect to MT5")
-                return False
+            # Debug: Test symbol access (only if MT5 is available)
+            if self.mt5_interface:
+                try:
+                    import MetaTrader5 as mt5
+                    test_symbols = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD"]
+                    for symbol in test_symbols:
+                        tick = mt5.symbol_info_tick(symbol)
+                        if tick:
+                            logger.info(f"✅ {symbol}: bid={tick.bid}, ask={tick.ask}")
+                        else:
+                            logger.error(f"❌ {symbol}: No tick data available")
+                except Exception as e:
+                    logger.debug(f"Symbol test failed: {e}")
             
-            logger.info("MT5 connection established successfully")
-            
-            # Initialize trading engine
+            # Initialize trading engine (can work without MT5 for dashboard)
             logger.info("Initializing trading engine...")
-            self.trading_engine = await initialize_trading_engine(self.mt5_interface)
+            self.trading_engine = initialize_trading_engine(self.mt5_interface)
             if not self.trading_engine:
-                logger.error("Failed to initialize trading engine")
-                return False
+                if self.mt5_interface:
+                    logger.error("Failed to initialize trading engine")
+                    return False
+                else:
+                    logger.warning("Trading engine initialized in demo mode (no MT5)")
+                    # Still proceed to show dashboard
             
             logger.info("All components initialized successfully")
             return True
@@ -105,6 +125,9 @@ class TradingBotApplication:
             # Start the trading engine (will be controlled via dashboard)
             logger.info("Trading engine ready (not started - use dashboard to control)")
             
+            # Get config for logging and display
+            config = get_config()
+            
             # Log startup completion
             self.database_manager.log_system_event(
                 level="INFO",
@@ -112,15 +135,18 @@ class TradingBotApplication:
                 message="Trading bot application started successfully",
                 details={
                     "dashboard_url": f"http://{config.api.host}:{config.api.port}",
-                    "mt5_connected": True,
+                    "mt5_connected": self.mt5_interface is not None,
                     "database_connected": True
                 }
             )
             
             logger.info(f"🚀 Fibonacci Trading Bot started successfully!")
-            config = get_config()
             logger.info(f"📊 Dashboard available at: http://{config.api.host}:{config.api.port}")
-            logger.info(f"🔧 Use the dashboard to control trading operations")
+            if self.mt5_interface:
+                logger.info(f"🔧 Use the dashboard to control trading operations")
+            else:
+                logger.warning(f"⚠️  MT5 not available - dashboard runs in demo mode")
+                logger.info(f"💡 For full functionality, run this bot on Windows with MT5 installed")
             
             # Wait for shutdown signal
             await dashboard_task

@@ -17,7 +17,7 @@ from plotly.subplots import make_subplots
 import plotly.utils
 
 from src.execution.trading_engine import get_trading_engine, TradingState, TradingParameters
-from src.data.mt5_interface import get_mt5_interface
+from src.data.mt5_interface import get_connection
 from src.monitoring import get_logger
 
 logger = get_logger("web_dashboard")
@@ -85,7 +85,7 @@ DASHBOARD_HTML = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fibonacci Trading Bot Dashboard</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.28.0.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .status-running { color: #10b981; }
@@ -203,32 +203,29 @@ DASHBOARD_HTML = """
             </div>
         </div>
 
-        <!-- Charts and Positions -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Live Chart -->
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <h2 class="text-xl font-semibold mb-4">Live Chart</h2>
-                <div id="live-chart" style="height: 400px;"></div>
-            </div>
+        <!-- Full Width Chart -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Live Chart - EUR/USD with Fibonacci Analysis & Fractals</h2>
+            <div id="live-chart" style="height: 800px; width: 100%;"></div>
+        </div>
 
-            <!-- Active Positions -->
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <h2 class="text-xl font-semibold mb-4">Active Positions</h2>
-                <div id="positions-table" class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Symbol</th>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">P&L</th>
-                            </tr>
-                        </thead>
-                        <tbody id="positions-tbody" class="bg-white divide-y divide-gray-200">
-                            <!-- Positions will be populated here -->
-                        </tbody>
-                    </table>
-                </div>
+        <!-- Active Positions -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-semibold mb-4">Active Positions</h2>
+            <div id="positions-table" class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Symbol</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">P&L</th>
+                        </tr>
+                    </thead>
+                    <tbody id="positions-tbody" class="bg-white divide-y divide-gray-200">
+                        <!-- Positions will be populated here -->
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -366,6 +363,25 @@ DASHBOARD_HTML = """
         document.getElementById('update-risk-btn').addEventListener('click', updateRiskSettings);
         document.getElementById('update-symbols-btn').addEventListener('click', updateSymbols);
 
+        // Load and display chart
+        async function loadChart(symbol = 'EURUSD') {
+            try {
+                const response = await fetch(`/api/chart/${symbol}`);
+                const data = await response.json();
+                
+                if (data.chart) {
+                    const chartDiv = document.getElementById('live-chart');
+                    Plotly.newPlot(chartDiv, data.chart.data, data.chart.layout, {responsive: true});
+                } else {
+                    console.error('No chart data received');
+                }
+            } catch (error) {
+                console.error('Failed to load chart:', error);
+                // Show placeholder text
+                document.getElementById('live-chart').innerHTML = '<p class="text-center text-gray-500 mt-20">Chart data not available</p>';
+            }
+        }
+
         // Initialize dashboard
         async function initializeDashboard() {
             try {
@@ -390,6 +406,9 @@ DASHBOARD_HTML = """
                 document.getElementById('usdjpy-cb').checked = symbols.includes('USDJPY');
                 document.getElementById('audusd-cb').checked = symbols.includes('AUDUSD');
 
+                // Load initial chart
+                loadChart('EURUSD');
+
             } catch (error) {
                 console.error('Failed to initialize dashboard:', error);
             }
@@ -408,6 +427,15 @@ DASHBOARD_HTML = """
                 console.error('Failed to refresh data:', error);
             }
         }, 5000);
+
+        // Refresh chart every 3 seconds for live updates (more responsive)
+        setInterval(async () => {
+            try {
+                loadChart('EURUSD');
+            } catch (error) {
+                console.error('Failed to refresh chart:', error);
+            }
+        }, 3000);
     </script>
 </body>
 </html>
@@ -537,46 +565,246 @@ async def get_fibonacci_levels(symbol: str):
 
 
 @app.get("/api/chart/{symbol}")
-async def get_chart_data(symbol: str, bars: int = 100):
+async def get_chart_data(symbol: str, bars: int = 200):
     """Get chart data for visualization."""
-    mt5 = get_mt5_interface()
+    mt5 = get_connection()
     if not mt5:
-        raise HTTPException(status_code=503, detail="MT5 interface not available")
+        # Return mock chart data when MT5 is not available
+        return {
+            "chart": {
+                "data": [],
+                "layout": {
+                    "title": f"{symbol} - Chart Not Available (MT5 Required)",
+                    "xaxis": {"title": "Time"},
+                    "yaxis": {"title": "Price"},
+                    "annotations": [{
+                        "text": "MT5 connection required for live chart data<br>Run on Windows with MT5 installed",
+                        "x": 0.5,
+                        "y": 0.5,
+                        "xref": "paper",
+                        "yref": "paper",
+                        "showarrow": False,
+                        "font": {"size": 16}
+                    }]
+                }
+            }
+        }
     
     try:
-        # Get market data
-        data = await mt5.get_historical_data(symbol, "M1", bars)
+        # Get market data using get_rates method
+        from src.data.mt5_interface import TimeFrame
+        timeframe = TimeFrame.M1  # 1-minute timeframe
+        data = mt5.get_rates(symbol, timeframe, bars)
         if data is None or data.empty:
             raise HTTPException(status_code=404, detail="No data available")
         
-        # Create candlestick chart
+        # Create candlestick chart with improved styling
         fig = go.Figure(data=go.Candlestick(
             x=data.index,
-            open=data['open'],
-            high=data['high'],
-            low=data['low'],
-            close=data['close'],
-            name=symbol
+            open=data['Open'],
+            high=data['High'],
+            low=data['Low'],
+            close=data['Close'],
+            name=symbol,
+            increasing=dict(line=dict(color='#16A34A', width=1), fillcolor='#16A34A'),  # Green
+            decreasing=dict(line=dict(color='#DC2626', width=1), fillcolor='#DC2626'),  # Red
+            line=dict(width=1),
+            hoverinfo='x+y+text',
+            text=[f'O:{o:.5f} H:{h:.5f} L:{l:.5f} C:{c:.5f}' 
+                  for o, h, l, c in zip(data['Open'], data['High'], data['Low'], data['Close'])]
         ))
         
-        # Add Fibonacci levels if available
+        # Get trading engine data
         engine = get_trading_engine()
         if engine:
+            # Add fractal points
+            fractals = engine.fractals_cache.get(symbol, [])
+            if fractals:
+                # Separate up and down fractals
+                up_fractals = [f for f in fractals if f.type.value == 'up']
+                down_fractals = [f for f in fractals if f.type.value == 'down']
+                
+                # Add up fractals (highs) - positioned above candles
+                if up_fractals:
+                    fractal_times = []
+                    fractal_prices = []
+                    for f in up_fractals:
+                        # Position markers above the actual fractal price for visibility
+                        offset = (data['High'].max() - data['Low'].min()) * 0.002  # 0.2% offset
+                        fractal_times.append(f.timestamp)
+                        fractal_prices.append(f.price + offset)
+                    
+                    if fractal_times:
+                        fig.add_trace(go.Scatter(
+                            x=fractal_times,
+                            y=fractal_prices,
+                            mode='markers',
+                            marker=dict(color='#DC2626', size=16, symbol='triangle-down', 
+                                      line=dict(color='white', width=2)),
+                            name='Up Fractals (Swing Highs)',
+                            hovertemplate='Swing High<br>Actual Price: %{customdata:.5f}<br>Time: %{x}<extra></extra>',
+                            customdata=[f.price for f in up_fractals]
+                        ))
+                
+                # Add down fractals (lows) - positioned below candles
+                if down_fractals:
+                    fractal_times = []
+                    fractal_prices = []
+                    for f in down_fractals:
+                        # Position markers below the actual fractal price for visibility
+                        offset = (data['High'].max() - data['Low'].min()) * 0.002  # 0.2% offset
+                        fractal_times.append(f.timestamp)
+                        fractal_prices.append(f.price - offset)
+                    
+                    if fractal_times:
+                        fig.add_trace(go.Scatter(
+                            x=fractal_times,
+                            y=fractal_prices,
+                            mode='markers',
+                            marker=dict(color='#2563EB', size=16, symbol='triangle-up',
+                                      line=dict(color='white', width=2)),
+                            name='Down Fractals (Swing Lows)',
+                            hovertemplate='Swing Low<br>Actual Price: %{customdata:.5f}<br>Time: %{x}<extra></extra>',
+                            customdata=[f.price for f in down_fractals]
+                        ))
+            
+            # Add Fibonacci levels with improved visualization
             fibonacci_levels = engine.get_fibonacci_levels(symbol)
             if fibonacci_levels and 'retracements' in fibonacci_levels:
-                for level_name, level_price in fibonacci_levels['retracements'].items():
-                    fig.add_hline(
+                # Get all fractals for showing swing structure
+                fractals = engine.fractals_cache.get(symbol, [])
+                
+                # Create proper swing connections between alternating highs and lows
+                if len(fractals) >= 2:
+                    # Only draw swing lines that make sense (connecting different fractal types)
+                    swing_lines = []
+                    
+                    for i in range(len(fractals) - 1):
+                        current_fractal = fractals[i]
+                        next_fractal = fractals[i + 1]
+                        
+                        # Only connect if fractals are different types (high to low or low to high)
+                        if current_fractal.type != next_fractal.type:
+                            swing_lines.append((current_fractal, next_fractal, i))
+                    
+                    # Draw the swing lines with proper styling
+                    for idx, (start_fractal, end_fractal, position) in enumerate(swing_lines):
+                        # Determine line style based on recency
+                        if position >= len(fractals) - 3:  # Most recent swings
+                            line_color = '#8B5CF6'
+                            line_width = 3
+                            line_dash = 'solid'
+                            opacity = 1.0
+                            show_markers = True
+                            marker_size = 6
+                            line_name = f'Recent Swing ({end_fractal.price - start_fractal.price:+.5f})'
+                        elif position >= len(fractals) - 5:  # Previous swings
+                            line_color = '#A78BFA'
+                            line_width = 2
+                            line_dash = 'dash'
+                            opacity = 0.7
+                            show_markers = False
+                            marker_size = 4
+                            line_name = f'Previous Swing ({end_fractal.price - start_fractal.price:+.5f})'
+                        else:  # Older swings
+                            line_color = '#C4B5FD'
+                            line_width = 1
+                            line_dash = 'dot'
+                            opacity = 0.4
+                            show_markers = False
+                            marker_size = 3
+                            line_name = None
+                        
+                        # Add swing line only if it makes sense
+                        fig.add_trace(go.Scatter(
+                            x=[start_fractal.timestamp, end_fractal.timestamp],
+                            y=[start_fractal.price, end_fractal.price],
+                            mode='lines+markers' if show_markers else 'lines',
+                            line=dict(color=line_color, width=line_width, dash=line_dash),
+                            marker=dict(color=line_color, size=marker_size) if show_markers else None,
+                            name=line_name,
+                            hovertemplate=f'{start_fractal.type.value.title()} to {end_fractal.type.value.title()}<br>Price: %{{y:.5f}}<br>Time: %{{x}}<extra></extra>',
+                            opacity=opacity,
+                            showlegend=line_name is not None and idx < 2  # Only show first 2 in legend
+                        ))
+                
+                # Calculate time range for limited Fibonacci lines
+                time_range = data.index[-1] - data.index[0]
+                # Use the dominant swing from Fibonacci levels for timing
+                if 'swing_start' in fibonacci_levels:
+                    fib_start_time = max(fibonacci_levels['swing_start'].timestamp, data.index[-1] - time_range * 0.7)
+                else:
+                    fib_start_time = data.index[-1] - time_range * 0.7
+                fib_end_time = data.index[-1] + time_range * 0.15  # Extend 15% into future
+                
+                # Add Fibonacci retracement levels with limited width and better colors
+                fib_colors = ['#FFD700', '#FF8C00', '#FF4500', '#32CD32', '#4169E1']  # Gold, DarkOrange, OrangeRed, LimeGreen, RoyalBlue
+                fib_styles = ['solid', 'dash', 'dot', 'dashdot', 'longdash']
+                
+                for i, (level_name, level_price) in enumerate(fibonacci_levels['retracements'].items()):
+                    color = fib_colors[i % len(fib_colors)]
+                    dash_style = fib_styles[i % len(fib_styles)]
+                    
+                    # Add horizontal line with limited width
+                    fig.add_trace(go.Scatter(
+                        x=[fib_start_time, fib_end_time],
+                        y=[level_price, level_price],
+                        mode='lines',
+                        line=dict(color=color, width=2, dash=dash_style),
+                        name=f'Fib {level_name} ({level_price:.5f})',
+                        hovertemplate=f'Fibonacci {level_name}<br>Price: %{{y:.5f}}<extra></extra>',
+                        showlegend=True
+                    ))
+                    
+                    # Add text annotation on the right
+                    fig.add_annotation(
+                        x=fib_end_time,
                         y=level_price,
-                        line_dash="dash",
-                        annotation_text=f"Fib {level_name}",
-                        annotation_position="bottom right"
+                        text=f"  {level_name}",
+                        showarrow=False,
+                        xanchor="left",
+                        yanchor="middle",
+                        font=dict(size=10, color=color),
+                        bgcolor="rgba(255,255,255,0.8)",
+                        bordercolor=color,
+                        borderwidth=1
                     )
         
         fig.update_layout(
-            title=f"{symbol} Live Chart",
+            title={
+                'text': f"{symbol} - Fibonacci Trading Analysis",
+                'x': 0.5,
+                'font': {'size': 20}
+            },
             xaxis_title="Time",
             yaxis_title="Price",
-            height=400
+            height=800,  # Increased height
+            showlegend=True,
+            legend=dict(
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=0.01
+            ),
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            margin=dict(
+                l=60,   # Left margin
+                r=120,  # Right margin - increased for space
+                t=80,   # Top margin
+                b=60    # Bottom margin
+            ),
+            xaxis=dict(
+                gridcolor='lightgray',
+                gridwidth=1,
+                domain=[0, 0.85]  # Chart takes 85% of width, leaving space on right
+            ),
+            yaxis=dict(
+                gridcolor='lightgray',
+                gridwidth=1,
+                side='left'
+            ),
+            hovermode='x unified'
         )
         
         return {"chart": json.loads(fig.to_json())}
@@ -620,7 +848,7 @@ async def websocket_endpoint(websocket: WebSocket):
 async def health_check():
     """Health check endpoint."""
     engine = get_trading_engine()
-    mt5 = get_mt5_interface()
+    mt5 = get_connection()
     
     return {
         "status": "healthy",
