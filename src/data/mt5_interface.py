@@ -430,15 +430,34 @@ class MT5ConnectionManager:
     """Connection manager with automatic reconnection and pooling."""
     
     def __init__(self, config: Optional[MT5Config] = None, pool_size: int = 1):
-        self.config = config or get_config().mt5
+        self._custom_config = config
+        self._config = None
         self.pool_size = pool_size
         self.connections: List[MT5Interface] = []
         self.active_connections = 0
         self._lock = threading.RLock()
         self.auto_reconnect = True
         self.reconnect_interval = 30  # seconds
-        self._monitor_thread = None
-        self._stop_monitoring = False
+    
+    @property
+    def config(self):
+        """Lazy-load configuration."""
+        if self._config is None:
+            if self._custom_config:
+                self._config = self._custom_config
+            else:
+                try:
+                    self._config = get_config().mt5
+                except RuntimeError:
+                    # Fallback to default config if not loaded yet
+                    logger.warning("Configuration not loaded, using default MT5 config")
+                    self._config = {
+                        'server': 'Demo-Server',
+                        'login': 12345678,
+                        'password': 'demo_password',
+                        'timeout': 10000
+                    }
+        return self._config
     
     def initialize(self) -> bool:
         """Initialize connection pool."""
@@ -532,18 +551,26 @@ class MT5ConnectionManager:
             logger.info("Connection pool shutdown complete")
 
 
-# Global connection manager instance
-connection_manager = MT5ConnectionManager()
+# Global connection manager instance (lazy initialization)
+connection_manager = None
 
 # Convenience functions
 def get_connection() -> Optional[MT5Interface]:
     """Get an MT5 connection from the global pool."""
+    global connection_manager
+    if connection_manager is None:
+        connection_manager = MT5ConnectionManager()
     return connection_manager.get_connection()
 
 def initialize_mt5() -> bool:
     """Initialize the global MT5 connection manager."""
+    global connection_manager
+    if connection_manager is None:
+        connection_manager = MT5ConnectionManager()
     return connection_manager.initialize()
 
 def shutdown_mt5():
     """Shutdown the global MT5 connection manager."""
-    connection_manager.shutdown()
+    global connection_manager
+    if connection_manager is not None:
+        connection_manager.shutdown()
