@@ -56,10 +56,10 @@
 - **Requirements Doc**: `docs/STRATEGY_REQUIREMENTS.md` - **CRITICAL REFERENCE**
 - **Status**: Detailed Q&A in progress to capture exact strategy specifications
 
-### Visual Backtesting System (Phase 3 - COMPLETED ✅)
+### Visual Backtesting System (Phase 3 - IN PROGRESS ⚠️)
 - **Purpose**: Visual verification of strategy before ML/AI optimization
 - **Architecture**: Python + VectorBT + PostgreSQL + TradingView-style charts
-- **Research Dashboard**: Fully functional at http://localhost:9000
+- **Research Dashboard**: Running at http://localhost:8001
 - **Data Sources**: DJ30 M1 data (219k+ bars), EURUSD H1 data (98 bars)
 - **Key Features**:
   - TradingView-style professional charting (using Lightweight Charts)
@@ -98,10 +98,11 @@
 4. **High fractal** at 13:28:00, price 43885.3 (bar 36)
 
 #### Current Status:
-- **Fractal Detection**: ✅ WORKING PERFECTLY
-- **Fractal Visualization**: 🔧 SOLUTION IMPLEMENTED, NEEDS USER TESTING
+- **Fractal Detection**: ✅ WORKING PERFECTLY (Backend verified)
+- **Fractal Visualization**: ⚠️ BLOCKED BY CONNECTION ISSUE
+- **Dashboard Access**: ❌ WSL networking issue preventing browser access
 - **Strategy Verification**: ✅ CONFIRMED ACCURATE
-- **Next Required**: User test fractal visualization fix before proceeding
+- **Next Required**: Fix WSL networking issue to restore dashboard access
 
 ### AI Agent Instructions
 When working on this project:
@@ -119,21 +120,34 @@ When working on this project:
 ### Next Session Continuation Points
 For the next Claude agent to continue this work:
 
-1. **IMMEDIATE PRIORITY**: Test fractal visualization fix with user
-2. **Current State**: Fractal detection working, visualization solution implemented but untested
-3. **Test Data Available**: DJ30 M1 (219k+ bars), EURUSD H1 (98 bars) in PostgreSQL
-4. **Testing Commands**:
+1. **CRITICAL ISSUE**: Research dashboard servers start but aren't accessible via browser (Connection refused)
+2. **Likely Cause**: WSL networking issue - servers bind to ports but Windows can't access them
+3. **What Was Working**: Dashboard at http://localhost:9000 displayed 4 fractals correctly before visual update attempt
+4. **What Went Wrong**: Created multiple new dashboard files instead of just updating CSS
+5. **Files to Clean Up**:
+   - /mnt/d/trading_bot/minimal_dashboard.py
+   - /mnt/d/trading_bot/simple_tradingview_dashboard.py  
+   - /mnt/d/trading_bot/working_dashboard.py
+   - /mnt/d/trading_bot/test_server.py
+   - /mnt/d/trading_bot/simple_fractal_test.py
+6. **Original Working File**: `/mnt/d/trading_bot/src/research/dashboard/research_api.py`
+7. **User Request**: "Don't break anything" - wanted visual updates only, not new architecture
+8. **Next Steps**:
+   - Diagnose WSL networking issue (check WSL version, port forwarding)
+   - Clean up experimental files
+   - Restore original dashboard functionality
+   - Update ONLY CSS for TradingView look
+9. **Testing Commands**:
    ```bash
-   # Start research dashboard
-   python3 -m uvicorn src.research.dashboard.research_api:app --host 0.0.0.0 --port 9000 --reload
+   # Check WSL version
+   wsl --version
    
-   # Load test data and verify fractals appear on frontend
-   # Expected result: Should see 4 fractal arrows on chart at positions 8, 22, 31, 36
-   # User should access http://localhost:9000 and test manually
+   # Test basic connectivity
+   curl http://localhost:9000
+   
+   # Start research dashboard with explicit localhost binding
+   python3 -m uvicorn src.research.dashboard.research_api:app --host localhost --port 9000
    ```
-5. **Key Files Modified**: `/mnt/d/trading_bot/src/research/dashboard/research_api.py`
-6. **If Visualization Works**: Proceed to swing analysis testing
-7. **If Visualization Fails**: Debug frontend marker display system further
 
 ### Development Environment
 - **User Platform**: Windows with WSL for communication  

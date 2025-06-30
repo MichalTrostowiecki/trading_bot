@@ -31,7 +31,9 @@
       "Bash(./run_dashboard.sh:*)",
       "Bash(kill:*)",
       "Bash(rg:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(wsl:*)",
+      "Bash(sudo find /var/log -name \"*.log\" -size +10M -exec ls -lh {} \\;)"
     ],
     "deny": []
   }

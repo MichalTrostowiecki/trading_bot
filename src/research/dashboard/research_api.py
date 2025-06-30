@@ -112,73 +112,113 @@ async def get_research_dashboard():
         <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                background: #1a1a1a;
-                color: #ffffff;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+                background: #131722;
+                color: #d1d4dc;
                 overflow: hidden;
+                font-size: 12px;
             }
             .header {
-                background: #2d2d2d;
-                padding: 10px 20px;
-                border-bottom: 1px solid #404040;
+                background: #1e222d;
+                padding: 8px 16px;
+                border-bottom: 1px solid #2a2e39;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                height: 60px;
+                height: 44px;
             }
-            .logo { font-size: 18px; font-weight: bold; color: #4CAF50; }
+            .logo { 
+                font-size: 13px; 
+                font-weight: 500; 
+                color: #d1d4dc;
+                letter-spacing: -0.2px;
+            }
             .controls {
                 display: flex;
-                gap: 15px;
+                gap: 12px;
                 align-items: center;
             }
             .control-group {
                 display: flex;
-                gap: 5px;
+                gap: 6px;
                 align-items: center;
             }
-            .control-group label { font-size: 12px; color: #aaa; }
+            .control-group label { 
+                font-size: 11px; 
+                color: #787b86; 
+                font-weight: 400;
+            }
             select, input { 
-                background: #404040; 
-                border: 1px solid #555; 
-                color: white; 
+                background: #131722; 
+                border: 1px solid #2a2e39; 
+                color: #d1d4dc; 
                 padding: 5px 8px; 
-                border-radius: 3px;
+                border-radius: 2px;
+                font-size: 11px;
+                transition: all 0.2s ease;
+                outline: none;
+            }
+            select:hover, input:hover {
+                border-color: #434651;
+            }
+            select:focus, input:focus {
+                border-color: #4a90e2;
             }
             button {
-                background: #4CAF50;
-                border: none;
-                color: white;
-                padding: 8px 16px;
-                border-radius: 3px;
+                background: transparent;
+                border: 1px solid #2a2e39;
+                color: #d1d4dc;
+                padding: 5px 10px;
+                border-radius: 2px;
                 cursor: pointer;
-                font-size: 12px;
+                font-size: 11px;
+                height: 26px;
+                font-weight: 400;
+                transition: all 0.2s ease;
             }
-            button:hover { background: #45a049; }
-            button:disabled { background: #666; cursor: not-allowed; }
+            button:hover { 
+                background: #2a2e39; 
+                color: #f0f3fa;
+            }
+            button:active {
+                background: #363a45;
+            }
+            button:disabled { 
+                background: transparent; 
+                color: #434651; 
+                cursor: not-allowed;
+                border-color: #2a2e39;
+            }
             .main-container {
                 display: flex;
-                height: calc(100vh - 60px);
+                height: calc(100vh - 44px);
             }
             .chart-container {
                 flex: 1;
-                background: #1e1e1e;
+                background: #131722;
                 position: relative;
             }
             .sidebar {
-                width: 300px;
-                background: #2d2d2d;
-                border-left: 1px solid #404040;
+                width: 280px;
+                background: #1e222d;
+                border-left: 1px solid #2a2e39;
                 overflow-y: auto;
             }
             .sidebar-section {
-                border-bottom: 1px solid #404040;
-                padding: 15px;
+                border-bottom: 1px solid #2a2e39;
             }
             .sidebar-section h3 {
-                margin-bottom: 10px;
-                font-size: 14px;
-                color: #4CAF50;
+                padding: 12px 16px;
+                margin: 0;
+                font-size: 12px;
+                font-weight: 600;
+                color: #d1d4dc;
+                background: #2a2e39;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            .sidebar-section > div:not(h3) {
+                padding: 12px 16px;
             }
             #chartDiv {
                 width: 100%;
@@ -196,44 +236,47 @@ async def get_research_dashboard():
             }
             .replay-controls {
                 position: fixed !important;
-                bottom: 20px !important;
-                left: 50% !important;
-                transform: translateX(-50%) !important;
-                background: rgba(45, 45, 45, 0.98) !important;
-                padding: 15px 20px !important;
-                border-radius: 8px !important;
+                bottom: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                background: #1e222d !important;
+                padding: 10px 20px !important;
                 display: flex !important;
-                gap: 10px !important;
+                gap: 8px !important;
                 align-items: center !important;
+                justify-content: center !important;
                 z-index: 9999 !important;
-                border: 3px solid #4CAF50 !important;
-                box-shadow: 0 8px 20px rgba(0, 0, 0, 0.8) !important;
-                min-width: 400px !important;
+                border-top: 1px solid #2a2e39 !important;
+                height: 60px !important;
                 visibility: visible !important;
                 opacity: 1 !important;
                 user-select: none !important;
             }
-            .replay-controls:hover {
-                border-color: #66BB6A !important;
-                box-shadow: 0 0 25px #4CAF50, 0 8px 20px rgba(0, 0, 0, 0.8) !important;
-            }
             .replay-btn {
-                background: #555;
-                border: none;
-                color: white;
-                padding: 8px 12px;
+                width: 36px;
+                height: 36px;
+                background: #2a2e39;
+                border: 1px solid #434651;
                 border-radius: 4px;
+                color: #d1d4dc;
                 cursor: pointer;
-                font-size: 16px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 14px;
+                transition: background 0.2s;
             }
-            .replay-btn:hover { background: #666; }
-            .replay-btn.active { background: #4CAF50; }
+            .replay-btn:hover { background: #363a45; }
+            .replay-btn:disabled { background: #1a1e27; color: #555a67; cursor: not-allowed; }
+            .replay-btn.active { background: #4CAF50; color: white; }
             .progress-bar {
-                width: 200px;
+                flex: 1;
+                max-width: 400px;
                 height: 4px;
-                background: #555;
+                background: #2a2e39;
                 border-radius: 2px;
                 overflow: hidden;
+                margin: 0 16px;
             }
             .progress-fill {
                 height: 100%;
@@ -241,12 +284,19 @@ async def get_research_dashboard():
                 width: 0%;
                 transition: width 0.1s;
             }
+            .progress-text {
+                font-size: 11px;
+                color: #787b86;
+                margin-left: 8px;
+                min-width: 60px;
+            }
             .status-bar {
-                background: #333;
+                background: #1e222d;
                 padding: 5px 15px;
-                font-size: 12px;
-                color: #aaa;
+                font-size: 11px;
+                color: #787b86;
                 text-align: center;
+                border-top: 1px solid #2a2e39;
             }
             .loading {
                 display: none;
@@ -262,16 +312,16 @@ async def get_research_dashboard():
             .metric {
                 display: flex;
                 justify-content: space-between;
-                margin-bottom: 8px;
-                font-size: 12px;
+                margin-bottom: 4px;
+                font-size: 11px;
             }
-            .metric-label { color: #aaa; }
-            .metric-value { color: white; font-weight: bold; }
+            .metric-label { color: #787b86; }
+            .metric-value { color: #d1d4dc; font-weight: 500; }
         </style>
     </head>
     <body>
         <div class="header">
-            <div class="logo">📈 Fibonacci Research Dashboard</div>
+            <div class="logo">🟢 Fibonacci Research Dashboard</div>
             <div class="controls">
                 <div class="control-group">
                     <label>Symbol:</label>
@@ -326,7 +376,7 @@ async def get_research_dashboard():
                     <div class="progress-bar">
                         <div class="progress-fill" id="progressFill"></div>
                     </div>
-                    <span id="positionDisplay">0 / 0</span>
+                    <span class="progress-text" id="positionDisplay">0 / 0</span>
                     <select id="speedSelect" onchange="updateReplaySpeed()">
                         <option value="0.5">0.5x</option>
                         <option value="1" selected>1x</option>
@@ -340,7 +390,7 @@ async def get_research_dashboard():
             <div class="sidebar">
                 <div class="sidebar-section">
                     <h3>📊 Data Inspector</h3>
-                    <div id="dataInspector">
+                    <div>
                         <div class="metric">
                             <span class="metric-label">Current Bar:</span>
                             <span class="metric-value" id="currentBar">-</span>
@@ -373,7 +423,7 @@ async def get_research_dashboard():
                 </div>
                 
                 <div class="sidebar-section">
-                    <h3>🔍 Debug Panel</h3>
+                    <h3>🐛 Debug Panel</h3>
                     <div id="debugPanel">
                         <div class="metric">
                             <span class="metric-label">Fractals:</span>
@@ -515,7 +565,7 @@ async def get_research_dashboard():
             
             // Initialize WebSocket connection
             function initWebSocket() {
-                const wsUrl = `ws://localhost:9000/ws`;
+                const wsUrl = `ws://localhost:8001/ws`;
                 websocket = new WebSocket(wsUrl);
                 
                 websocket.onopen = function(event) {
@@ -595,7 +645,8 @@ async def get_research_dashboard():
                     
                     // CRITICAL: Load all accumulated fractals when jumping positions
                     // This ensures we see all previously detected fractals, not just new ones
-                    if (data.bar_index !== undefined && data.bar_index > 0) {
+                    if (data.bar_index !== undefined) {
+                        // Always load accumulated elements to prevent fractals from disappearing
                         loadAccumulatedStrategyElements(data.bar_index);
                     }
                     
@@ -627,8 +678,15 @@ async def get_research_dashboard():
                 const progressPercent = data.progress || (currentPosition / totalBars * 100);
                 updateStatus(`Bar ${currentPosition + 1}/${totalBars} (${progressPercent.toFixed(1)}%) - ${data.timestamp || ''}`);
                 
-                // CRITICAL: Update all markers after processing
+                // CRITICAL: Update all markers after processing to preserve fractals
                 updateAllMarkers();
+                
+                // Additional safeguard: Ensure fractals remain visible during playback
+                if (document.getElementById('showFractals').checked) {
+                    setTimeout(() => {
+                        loadAccumulatedStrategyElements(currentPosition);
+                    }, 50);
+                }
             }
             
             // Initialize TradingView Chart
@@ -859,12 +917,20 @@ async def get_research_dashboard():
                     const currentTime = window.fullChartData[dataPosition].time;
 
                     if (position === 0) {
-                        // First bar: establish initial view with reasonable range
-                        const rangeSeconds = 48 * 60 * 60; // 48 hours for better overview
+                        // First bar: establish initial view with proper overview showing multiple bars
+                        const totalBarsInData = window.fullChartData.length;
+                        const barsToShow = Math.min(100, Math.max(20, Math.floor(totalBarsInData / 8))); // Show 12.5% of data, 20-100 bars
+                        
+                        // Calculate time range based on actual data timeframe
+                        const firstTime = window.fullChartData[0].time;
+                        const lastTime = window.fullChartData[totalBarsInData - 1].time;
+                        const avgTimeStep = (lastTime - firstTime) / totalBarsInData;
+                        const rangeSeconds = barsToShow * avgTimeStep;
+                        
                         if (window.setProgrammaticRange) {
                             window.setProgrammaticRange(
-                                currentTime - rangeSeconds,
-                                currentTime + (60 * 60) // 1 hour padding on right
+                                Math.max(firstTime, currentTime - rangeSeconds * 0.1), // Start just before current
+                                currentTime + rangeSeconds * 0.9 // Show mostly future bars for context
                             );
                         }
                         userHasManuallyPanned = false;
@@ -1365,6 +1431,11 @@ async def get_research_dashboard():
                             const dataPosition = window.userStartOffset + currentPosition;
                             updateDataInspector(marketData[dataPosition], currentPosition);
                         }
+                        
+                        // CRITICAL: Ensure loading indicator is hidden after all setup
+                        setTimeout(() => {
+                            showLoading(false);
+                        }, 100);
                     } else {
                         updateStatus(`Error: ${result.message}`);
                     }
@@ -1886,7 +1957,12 @@ async def get_research_dashboard():
             }
             
             function showLoading(show) {
-                document.getElementById('loadingIndicator').style.display = show ? 'block' : 'none';
+                const indicator = document.getElementById('loadingIndicator');
+                if (indicator) {
+                    indicator.style.display = show ? 'block' : 'none';
+                    // Debug logging to track loading state
+                    console.log(show ? '🔄 Loading indicator shown' : '✅ Loading indicator hidden');
+                }
             }
             
             function showWelcomeMessage() {
