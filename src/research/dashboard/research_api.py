@@ -796,7 +796,7 @@ async def get_research_dashboard():
 
                 // Clear any existing position indicator
                 if (window.currentPositionLine) {
-                    chart.removePriceLine(window.currentPositionLine);
+                    candlestickSeries.removePriceLine(window.currentPositionLine);
                     window.currentPositionLine = null;
                 }
 
@@ -860,7 +860,7 @@ async def get_research_dashboard():
 
                     if (position === 0) {
                         // First bar: establish initial view with reasonable range
-                        const rangeSeconds = 6 * 60 * 60; // 6 hours
+                        const rangeSeconds = 48 * 60 * 60; // 48 hours for better overview
                         if (window.setProgrammaticRange) {
                             window.setProgrammaticRange(
                                 currentTime - rangeSeconds,
@@ -1028,7 +1028,7 @@ async def get_research_dashboard():
 
                 // Remove existing position line if it exists
                 if (window.currentPositionLine) {
-                    chart.removePriceLine(window.currentPositionLine);
+                    candlestickSeries.removePriceLine(window.currentPositionLine);
                     window.currentPositionLine = null;
                 }
 
@@ -1394,7 +1394,7 @@ async def get_research_dashboard():
 
                 // Clear position indicator
                 if (window.currentPositionLine) {
-                    chart.removePriceLine(window.currentPositionLine);
+                    candlestickSeries.removePriceLine(window.currentPositionLine);
                     window.currentPositionLine = null;
                 }
 

@@ -68,7 +68,8 @@ class FractalDetector:
         Detect all fractals in the given data.
         
         Args:
-            data: OHLC data with 'High', 'Low' columns and datetime index
+            data: OHLC data with High/Low columns and datetime index
+                  Supports column names: 'High'/'Low', 'HIGH'/'LOW', or 'high'/'low'
             
         Returns:
             List of detected fractals
@@ -76,6 +77,25 @@ class FractalDetector:
         if len(data) < (self.config.periods * 2 + 1):
             logger.warning(f"Insufficient data for fractal detection: {len(data)} bars, need at least {self.config.periods * 2 + 1}")
             return []
+        
+        # Validate required columns exist
+        high_col = None
+        low_col = None
+        
+        for col_name in ['High', 'HIGH', 'high']:
+            if col_name in data.columns:
+                high_col = col_name
+                break
+        
+        for col_name in ['Low', 'LOW', 'low']:
+            if col_name in data.columns:
+                low_col = col_name
+                break
+        
+        if high_col is None:
+            raise KeyError("High price column not found. Expected one of: 'High', 'HIGH', 'high'")
+        if low_col is None:
+            raise KeyError("Low price column not found. Expected one of: 'Low', 'LOW', 'low'")
         
         fractals = []
         
@@ -96,7 +116,9 @@ class FractalDetector:
     def _detect_up_fractals(self, data: pd.DataFrame) -> List[Fractal]:
         """Detect up fractals (highest highs)."""
         fractals = []
-        high_prices = data['High'].values
+        # Handle both title case and uppercase column names
+        high_col = 'High' if 'High' in data.columns else ('HIGH' if 'HIGH' in data.columns else 'high')
+        high_prices = data[high_col].values
         timestamps = data.index
         
         # Check each potential fractal point
@@ -143,7 +165,9 @@ class FractalDetector:
     def _detect_down_fractals(self, data: pd.DataFrame) -> List[Fractal]:
         """Detect down fractals (lowest lows)."""
         fractals = []
-        low_prices = data['Low'].values
+        # Handle both title case and uppercase column names
+        low_col = 'Low' if 'Low' in data.columns else ('LOW' if 'LOW' in data.columns else 'low')
+        low_prices = data[low_col].values
         timestamps = data.index
         
         # Check each potential fractal point

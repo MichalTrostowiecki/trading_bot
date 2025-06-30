@@ -18,7 +18,20 @@
       "Bash(PATH=$PATH:~/.local/bin python3 main.py)",
       "Bash(PATH=$PATH:~/.local/bin pip3 install -r requirements-core.txt)",
       "Bash(PATH=$PATH:~/.local/bin pip3 install loguru)",
-      "Bash(PATH=$PATH:~/.local/bin pip3 install MetaTrader5)"
+      "Bash(PATH=$PATH:~/.local/bin pip3 install MetaTrader5)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(chmod:*)",
+      "Bash(timeout:*)",
+      "Bash(pkill:*)",
+      "Bash(true)",
+      "Bash(sudo fuser:*)",
+      "Bash(ss:*)",
+      "Bash(cat:*)",
+      "Bash(./run_dashboard.sh:*)",
+      "Bash(kill:*)",
+      "Bash(rg:*)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }

@@ -3,12 +3,12 @@
 ## Project Overview
 
 **Project Name**: Fibonacci-Based AI Trading Bot
-**Version**: 2.0.0 - PRODUCTION READY
-**Project Type**: Fully Functional Automated Trading System
-**Target Platform**: Python + MetaTrader 5 Integration
-**Status**: ✅ OPERATIONAL - Live trading system with web dashboard
+**Version**: 2.5.3 - PRODUCTION READY + VISUAL BACKTESTING COMPLETE
+**Project Type**: Fully Functional Automated Trading System with Visual Backtesting
+**Target Platform**: Python + MetaTrader 5 Integration + PostgreSQL
+**Status**: ✅ OPERATIONAL - Live trading system with web dashboard | ✅ COMPLETE - Visual backtesting system
 
-## 🚀 CURRENT SYSTEM STATUS (Updated: 2025-06-27)
+## 🚀 CURRENT SYSTEM STATUS (Updated: 2025-06-28)
 
 ### ✅ COMPLETED FEATURES
 - **Live MT5 Integration**: Successfully connects to BlueberryMarkets demo account
@@ -19,6 +19,16 @@
 - **Cross-Platform Support**: WSL demo mode, Windows full functionality
 - **Real-Time Updates**: 2-second trading loop, 3-second chart refresh
 - **Comprehensive Logging**: Detailed fractal and trade execution logs
+
+### ✅ COMPLETED - VISUAL BACKTESTING SYSTEM (Phase 2.5)
+- **TradingView-Style Charts**: Professional charting with Lightweight Charts library ✅
+- **Progressive Backtesting**: Step-by-step bar replay with full control ✅
+- **PostgreSQL Integration**: Complete data storage with TimescaleDB ✅
+- **MT4 Data Import**: Successfully imported DJ30 and EURUSD data ✅
+- **Interactive Controls**: Play/pause, speed control, next/prev navigation ✅
+- **Research Dashboard**: Fully functional at http://localhost:9000 ✅
+- **Smart Chart Positioning**: Preserves user panning during replay ✅
+- **Welcome Screen**: Intuitive UI with clear instructions ✅
 
 ### 🎯 KEY ACHIEVEMENTS
 - Fixed "Invalid price" MT5 order placement errors
@@ -129,12 +139,20 @@ Python-based automated trading system with:
 - [x] Research tools development
 - [x] Basic MT5 integration
 
-### Phase 2: Core Trading System & Dashboard ⚡ IN PROGRESS
-- [ ] Automated trading engine with MT5 integration
-- [ ] Web control dashboard with trading controls
-- [ ] Database system for historical data and trade logging
-- [ ] Fibonacci strategy implementation with fractal detection
-- [ ] Risk management and position sizing
+### Phase 2: Core Trading System & Dashboard ✅ COMPLETED
+- [x] Automated trading engine with MT5 integration
+- [x] Web control dashboard with trading controls
+- [x] Database system for historical data and trade logging
+- [x] Fibonacci strategy implementation with fractal detection
+- [x] Risk management and position sizing
+
+### Phase 2.5: Visual Backtesting & Research System ⚡ IN PROGRESS
+- [ ] TradingView-style charting with replay functionality
+- [ ] PostgreSQL integration for complete data storage
+- [ ] MT4 data import (Nov 2024-present)
+- [ ] Visual verification of fractals, swings, and signals
+- [ ] VectorBT integration for fast backtesting
+- [ ] Research dashboard at http://localhost:8001
 
 ### Phase 3: Machine Learning Integration
 - [ ] AI-enhanced pattern recognition
@@ -345,6 +363,82 @@ pre-commit>=2.20.0
 - [ ] Provides clear market bias (bullish/bearish) for trade direction
 - [ ] Handles edge cases (sideways markets, equal swings)
 
+### Phase 2.5: Visual Backtesting & Research System
+
+#### Phase 2.5.1: Database Schema Extension
+**Duration**: 2 days
+**Dependencies**: Phase 2 complete
+**Deliverables**:
+- [ ] Extended PostgreSQL schema for backtesting data
+- [ ] Tables for fractals, swings, signals, and market context
+- [ ] Optimized indexes for time-series queries
+- [ ] Data migration scripts
+
+**Acceptance Criteria**:
+- [ ] All trading events stored with full context
+- [ ] Sub-second query performance on large datasets
+- [ ] Complete audit trail for ML training
+
+#### Phase 2.5.2: MT4 Data Import System
+**Duration**: 3 days
+**Dependencies**: Phase 2.5.1 complete
+**Deliverables**:
+- [ ] MT4 history file parser
+- [ ] Data validation and cleaning
+- [ ] Multi-timeframe support
+- [ ] Progress tracking and error recovery
+
+**Acceptance Criteria**:
+- [ ] Import data from Nov 2024 to present
+- [ ] Handle gaps and anomalies gracefully
+- [ ] Support M1, M5, M15, H1, H4, D1 timeframes
+
+#### Phase 2.5.3: TradingView-Style Research Dashboard
+**Duration**: 5 days
+**Dependencies**: Phase 2.5.2 complete
+**Deliverables**:
+- [ ] Professional charting with Lightweight Charts
+- [ ] Replay controls (play/pause/step)
+- [ ] Visual overlays for fractals, swings, Fibonacci
+- [ ] Debug panel showing calculations
+- [ ] Data inspector for any candle
+
+**Acceptance Criteria**:
+- [ ] Chart quality matches TradingView standards
+- [ ] Smooth performance with large datasets
+- [ ] All strategy elements visually verifiable
+- [ ] Export capabilities for documentation
+
+#### Phase 2.5.4: VectorBT Integration
+**Duration**: 3 days
+**Dependencies**: Phase 2.5.3 complete
+**Deliverables**:
+- [ ] VectorBT backtesting engine
+- [ ] Strategy performance analytics
+- [ ] Parameter optimization framework
+- [ ] Walk-forward analysis
+
+**Acceptance Criteria**:
+- [ ] Sub-second backtests on years of data
+- [ ] Accurate performance metrics
+- [ ] Reproducible results
+- [ ] Database integration for all results
+
+#### Phase 2.5.5: Research Tools & ML Preparation
+**Duration**: 3 days
+**Dependencies**: Phase 2.5.4 complete
+**Deliverables**:
+- [ ] Pattern discovery tools
+- [ ] Statistical analysis suite
+- [ ] Feature engineering pipeline
+- [ ] ML-ready data exports
+
+**Acceptance Criteria**:
+- [ ] Identify best/worst performing setups
+- [ ] Generate comprehensive reports
+- [ ] Export clean datasets for ML training
+- [ ] Document all findings
+
 ### Phase 3: Machine Learning Integration
 
 #### Phase 3.1: Feature Engineering Pipeline
@@ -550,6 +644,9 @@ pre-commit>=2.20.0
 - **[Dependencies Matrix](docs/DEPENDENCIES_MATRIX.md)** - Complete dependency mapping and installation order
 - **[Testing Strategy](docs/TESTING_STRATEGY.md)** - Comprehensive testing framework and quality assurance
 - **[Deployment Guide](docs/DEPLOYMENT_GUIDE.md)** - Production deployment procedures and best practices
+- **[Backtesting System](docs/BACKTESTING_SYSTEM.md)** - Visual backtesting and research system implementation plan
+- **[Visual Verification](docs/VISUAL_VERIFICATION.md)** - Guide for visually verifying strategy correctness
+- **[ML Preparation](docs/ML_PREPARATION.md)** - Machine learning integration preparation and roadmap
 - **[API Specification](docs/API_SPECIFICATION.md)** - Complete REST API and WebSocket documentation
 - **[Quality Assurance Framework](docs/QUALITY_ASSURANCE.md)** - QA standards and continuous improvement
 

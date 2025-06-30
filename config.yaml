@@ -1,0 +1,20 @@
+# Fibonacci Trading Bot Configuration
+
+# Database Configuration
+database:
+  url: "postgresql://postgres:misiek505@localhost:5432/fibonacci_trading_bot"
+  echo: false
+  pool_size: 5
+  max_overflow: 10
+
+# API Configuration  
+api:
+  host: "localhost"
+  port: 8000
+  debug: false
+
+# Research Dashboard Configuration
+research:
+  host: "localhost"
+  port: 8001
+  debug: false

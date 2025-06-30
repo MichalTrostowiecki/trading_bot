@@ -5,7 +5,40 @@ All notable changes to the Fibonacci Trading Bot project will be documented in t
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.5.3] - 2025-06-28
+
+### Added
+- Complete visual backtesting system with TradingView charts
+- Research dashboard at http://localhost:9000
+- Progressive bar-by-bar replay functionality
+- Interactive replay controls (play/pause/next/prev)
+- Real-time speed control (0.5x to 10x)
+- Smart chart positioning that preserves user panning
+- Data inspector showing current bar OHLCV
+- PostgreSQL integration with TimescaleDB
+- MT4 data import functionality
+- Welcome screen with clear instructions
+- Auto date range selection based on available data
+- Debug panel with fractal/swing/signal counts
+- Performance metrics display
+
+### Changed
+- Updated PROJECT_DOCUMENTATION.md to reflect completed Phase 2.5
+- Enhanced error handling for JavaScript operations
+- Improved date format handling for input fields
+
+### Fixed
+- JavaScript error: subscribeVisibleRangeChange → subscribeVisibleTimeRangeChange
+- Date format validation errors in HTML inputs
+- Massive single bar display issue in charts
+- Welcome message persistence after data load
+- Replay controls visibility issues
+- Real-time speed changes without restart requirement
+
+### Removed
+- Draggable functionality for replay controls (temporarily)
+
+## [2.5.0] - 2025-06-27
 
 ### Added
 - Initial project setup and documentation structure
@@ -14,18 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Complete testing strategy and quality assurance framework
 - Detailed phase-by-phase implementation specifications
 - Project directory structure and configuration templates
-
-### Changed
-- Nothing yet
-
-### Deprecated
-- Nothing yet
-
-### Removed
-- Nothing yet
-
-### Fixed
-- Nothing yet
+- Full MT5 integration with live trading
+- Web dashboard with Fibonacci visualization
+- Real order placement functionality
 
 ### Security
 - Proprietary license established for SAAS protection
