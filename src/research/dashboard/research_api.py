@@ -193,6 +193,99 @@ async def get_research_dashboard():
                 display: flex;
                 height: calc(100vh - 44px);
             }
+            .chart-tools {
+                position: absolute;
+                top: 12px;
+                left: 12px;
+                z-index: 1000;
+                background: #1e222d;
+                border: 1px solid #363a47;
+                border-radius: 6px;
+                padding: 0;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+                backdrop-filter: blur(10px);
+                min-width: 48px;
+            }
+            .tool-section {
+                border-bottom: 1px solid #363a47;
+                padding: 6px;
+            }
+            .tool-section:last-child {
+                border-bottom: none;
+            }
+            .tool-section.horizontal {
+                display: flex;
+                gap: 2px;
+            }
+            .tool-btn {
+                width: 36px;
+                height: 36px;
+                border: 1px solid #363a47;
+                background: #2a2e39;
+                color: #b8bcc5;
+                border-radius: 4px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.15s ease;
+                position: relative;
+                font-family: 'Segoe UI', system-ui, sans-serif;
+                font-size: 11px;
+                font-weight: 500;
+                text-transform: uppercase;
+                letter-spacing: 0.3px;
+            }
+            .tool-btn:hover {
+                background: #363a47;
+                color: #ffffff;
+                border-color: #4a90e2;
+                transform: translateY(-1px);
+                box-shadow: 0 2px 8px rgba(74, 144, 226, 0.2);
+            }
+            .tool-btn.active {
+                background: #4a90e2;
+                color: #ffffff;
+                border-color: #4a90e2;
+                box-shadow: 0 2px 12px rgba(74, 144, 226, 0.3);
+            }
+            .tool-btn .icon {
+                width: 16px;
+                height: 16px;
+                fill: currentColor;
+            }
+            .chart-tooltip {
+                position: absolute;
+                background: rgba(30, 34, 45, 0.95);
+                border: 1px solid #434651;
+                border-radius: 4px;
+                padding: 8px 12px;
+                color: #d1d4dc;
+                font-size: 12px;
+                font-family: 'Segoe UI', monospace;
+                pointer-events: none;
+                z-index: 1001;
+                white-space: nowrap;
+                backdrop-filter: blur(5px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                display: none;
+            }
+            .tooltip-row {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 2px;
+            }
+            .tooltip-row:last-child {
+                margin-bottom: 0;
+            }
+            .tooltip-label {
+                color: #8b8fa3;
+                margin-right: 12px;
+            }
+            .tooltip-value {
+                color: #ffffff;
+                font-weight: 500;
+            }
             .chart-container {
                 flex: 1;
                 background: #131722;
@@ -356,7 +449,78 @@ async def get_research_dashboard():
         
         <div class="main-container">
             <div class="chart-container" id="chartContainer">
-                <div id="chartDiv"></div>
+                <div id="chartDiv" style="width: 100%; height: 100%; position: relative;">
+                    <!-- Professional Chart Tools Panel -->
+                    <div class="chart-tools" id="chartTools">
+                        <div class="tool-section">
+                            <button class="tool-btn active" id="cursorTool" onclick="selectTool('cursor')" title="Cursor Tool">
+                                <svg width="16" height="16" viewBox="0 0 16 16" class="icon">
+                                    <path d="M3 2L3 12L6 9L8 11L12 7L10 5L13 2L3 2Z" fill="currentColor"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="tool-section">
+                            <button class="tool-btn" id="crosshairTool" onclick="selectTool('crosshair')" title="Crosshair Tool">
+                                <svg width="16" height="16" viewBox="0 0 16 16" class="icon">
+                                    <path d="M8 0V16M0 8H16" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+                                    <circle cx="8" cy="8" r="1.5" stroke="currentColor" stroke-width="1" fill="none"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="tool-section horizontal">
+                            <button class="tool-btn" onclick="fitChart()" title="Fit Chart">
+                                <svg width="16" height="16" viewBox="0 0 16 16" class="icon">
+                                    <path d="M2 2H6V6M14 2H10V6M2 14H6V10M14 14H10V10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                </svg>
+                            </button>
+                            <button class="tool-btn" onclick="resetZoom()" title="Reset Zoom">
+                                <svg width="16" height="16" viewBox="0 0 16 16" class="icon">
+                                    <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                    <path d="M8 5V11M5 8H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="tool-section">
+                            <button class="tool-btn" id="trendlineTool" onclick="selectTool('trendline')" title="Trend Line">
+                                <svg width="16" height="16" viewBox="0 0 16 16" class="icon">
+                                    <path d="M3 13L13 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                    <circle cx="3" cy="13" r="1.5" fill="currentColor"/>
+                                    <circle cx="13" cy="3" r="1.5" fill="currentColor"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="tool-section">
+                            <button class="tool-btn" onclick="clearDrawings()" title="Clear Drawings">
+                                <svg width="16" height="16" viewBox="0 0 16 16" class="icon">
+                                    <path d="M3 3L13 13M3 13L13 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Chart Data Tooltip -->
+                    <div class="chart-tooltip" id="chartTooltip">
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">Time:</span>
+                            <span class="tooltip-value" id="tooltipTime">-</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">O:</span>
+                            <span class="tooltip-value" id="tooltipOpen">-</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">H:</span>
+                            <span class="tooltip-value" id="tooltipHigh">-</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">L:</span>
+                            <span class="tooltip-value" id="tooltipLow">-</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">C:</span>
+                            <span class="tooltip-value" id="tooltipClose">-</span>
+                        </div>
+                    </div>
+                </div>
                 <div class="chart-loading" id="chartLoading">
                     <h2>📊 Loading Chart...</h2>
                     <p>Preparing TradingView Lightweight Charts</p>
@@ -560,25 +724,33 @@ async def get_research_dashboard():
             
             // Initialize WebSocket connection
             function initWebSocket() {
-                const wsUrl = `ws://localhost:8001/ws`;
-                websocket = new WebSocket(wsUrl);
-                
-                websocket.onopen = function(event) {
-                    updateStatus('WebSocket connected');
-                };
-                
-                websocket.onmessage = function(event) {
-                    const data = JSON.parse(event.data);
-                    handleWebSocketMessage(data);
-                };
-                
-                websocket.onclose = function(event) {
-                    updateStatus('WebSocket disconnected');
-                };
-                
-                websocket.onerror = function(error) {
-                    updateStatus('WebSocket error');
-                };
+                try {
+                    const wsUrl = `ws://localhost:8001/ws`;
+                    websocket = new WebSocket(wsUrl);
+                    
+                    websocket.onopen = function(event) {
+                        console.log('✅ WebSocket connected successfully');
+                        updateStatus('WebSocket connected');
+                    };
+                    
+                    websocket.onmessage = function(event) {
+                        const data = JSON.parse(event.data);
+                        handleWebSocketMessage(data);
+                    };
+                    
+                    websocket.onclose = function(event) {
+                        console.log('⚠️ WebSocket disconnected', event);
+                        updateStatus('WebSocket disconnected');
+                    };
+                    
+                    websocket.onerror = function(error) {
+                        console.error('❌ WebSocket error:', error);
+                        updateStatus('WebSocket error - continuing without real-time updates');
+                    };
+                } catch (error) {
+                    console.error('❌ Failed to initialize WebSocket:', error);
+                    updateStatus('WebSocket unavailable - continuing without real-time updates');
+                }
             }
             
             function handleWebSocketMessage(data) {
@@ -720,11 +892,24 @@ async def get_research_dashboard():
                     },
                     rightPriceScale: {
                         borderColor: '#4a5568',
+                        scaleMargins: {
+                            top: 0.1,
+                            bottom: 0.1,
+                        },
                     },
                     timeScale: {
                         borderColor: '#4a5568',
                         timeVisible: true,
                         secondsVisible: false,
+                        rightOffset: 20, // Add some right padding
+                        barSpacing: 3, // Tighter bar spacing for performance
+                        minBarSpacing: 0.5, // Allow tighter zooming
+                    },
+                    // TradingView Performance Settings
+                    handleScroll: true,
+                    handleScale: true,
+                    trackingMode: {
+                        exitMode: LightweightCharts.TrackingModeExitMode.OnNextTap,
                     },
                 });
                 
@@ -802,9 +987,12 @@ async def get_research_dashboard():
                 });
                 resizeObserver.observe(chartContainer);
                 
-                // Chart click handler for data inspection
+                // Chart click handler for tools and data inspection
                 chart.subscribeClick((param) => {
-                    if (param.time) {
+                    if (drawingMode && currentTool === 'trendline') {
+                        handleTrendLineClick(param);
+                    } else if (param.time) {
+                        // Regular data inspection
                         const barIndex = marketData.findIndex(bar => 
                             new Date(bar.timestamp).getTime() / 1000 === param.time
                         );
@@ -817,6 +1005,9 @@ async def get_research_dashboard():
                 });
                 
                 console.log('Chart initialized successfully!');
+                
+                // Initialize professional tools system
+                selectTool('cursor');
                 
                 // Show welcome message on empty chart
                 if (!marketData || marketData.length === 0) {
@@ -876,8 +1067,9 @@ async def get_research_dashboard():
                     return;
                 }
 
-                // Convert full market data once and store it for marker placement
+                // TradingView-style data conversion - simple and efficient
                 if (!window.fullChartData) {
+                    console.log(`📊 Converting ${marketData.length} bars (TradingView optimized)...`);
                     window.fullChartData = marketData.map(bar => ({
                         time: Math.floor(new Date(bar.timestamp).getTime() / 1000),
                         open: bar.open,
@@ -885,11 +1077,14 @@ async def get_research_dashboard():
                         low: bar.low,
                         close: bar.close
                     }));
+                    console.log(`✅ Data ready: ${window.fullChartData.length} bars`);
                 }
 
-                // Show only data up to current data position for progressive backtesting experience
-                const visibleData = window.fullChartData.slice(0, dataPosition + 1);
-                candlestickSeries.setData(visibleData);
+                // TradingView approach: Set all data once, control visibility with range
+                if (candlestickSeries.data().length !== window.fullChartData.length) {
+                    candlestickSeries.setData(window.fullChartData);
+                    console.log(`📊 Chart data set: ${window.fullChartData.length} bars loaded`);
+                }
 
                 // Store current data position for marker filtering
                 window.currentBacktestPosition = dataPosition;
@@ -912,23 +1107,24 @@ async def get_research_dashboard():
                     const currentTime = window.fullChartData[dataPosition].time;
 
                     if (position === 0) {
-                        // First bar: establish initial view with proper overview showing multiple bars
-                        const totalBarsInData = window.fullChartData.length;
-                        const barsToShow = Math.min(100, Math.max(20, Math.floor(totalBarsInData / 8))); // Show 12.5% of data, 20-100 bars
+                        // TradingView approach: Show reasonable initial range from user's start date
+                        const userStartOffset = window.userStartOffset || 0;
+                        const startTime = window.fullChartData[userStartOffset].time;
                         
-                        // Calculate time range based on actual data timeframe
-                        const firstTime = window.fullChartData[0].time;
-                        const lastTime = window.fullChartData[totalBarsInData - 1].time;
-                        const avgTimeStep = (lastTime - firstTime) / totalBarsInData;
-                        const rangeSeconds = barsToShow * avgTimeStep;
+                        // Show about 1000 bars (16 hours for M1) from user's start date
+                        const barsToShow = 1000;
+                        const endIndex = Math.min(window.fullChartData.length - 1, userStartOffset + barsToShow);
+                        const endTime = window.fullChartData[endIndex].time;
                         
-                        if (window.setProgrammaticRange) {
-                            window.setProgrammaticRange(
-                                Math.max(firstTime, currentTime - rangeSeconds * 0.1), // Start just before current
-                                currentTime + rangeSeconds * 0.9 // Show mostly future bars for context
-                            );
-                        }
+                        // Use TradingView's built-in range setting
+                        chart.timeScale().setVisibleRange({ from: startTime, to: endTime });
                         userHasManuallyPanned = false;
+                        
+                        console.log('📏 TradingView optimized view:', {
+                            startDate: new Date(startTime * 1000).toISOString().split('T')[0],
+                            endDate: new Date(endTime * 1000).toISOString().split('T')[0],
+                            showingBars: barsToShow
+                        });
                     } else if (!userHasManuallyPanned && currentRange) {
                         // Auto-scroll only if user hasn't manually panned
                         // Check if the current position is visible in current range
@@ -1297,14 +1493,13 @@ async def get_research_dashboard():
                 const barsPerDay = timeframe === 'M1' ? 1440 : timeframe === 'H1' ? 24 : 288; // Assume M5 default
                 const estimatedBars = daysDiff * barsPerDay;
                 
-                if (estimatedBars > 50000) {
+                // Simple data size check (TradingView can handle large datasets)
+                if (estimatedBars > 100000) {
                     const confirm = window.confirm(
-                        `⚠️ Large Dataset Warning!\n\n` +
-                        `Date range: ${daysDiff} days\n` +
-                        `Estimated bars: ${estimatedBars.toLocaleString()}\n\n` +
-                        `This may cause browser performance issues.\n` +
-                        `Recommended: Use smaller date ranges (< 30 days for M1).\n\n` +
-                        `Continue anyway?`
+                        `📊 Large Dataset\n\n` +
+                        `Loading ${estimatedBars.toLocaleString()} bars (${daysDiff} days)\n\n` +
+                        `This may take a moment to load.\n` +
+                        `Continue?`
                     );
                     if (!confirm) return;
                 }
@@ -1418,7 +1613,11 @@ async def get_research_dashboard():
                         // Update chart to show starting position (position 0)
                         updateChartProgressive(currentPosition);
                         updatePositionDisplay();
-                        showReplayControls();
+                        // Show replay controls (make visible)
+                        const replayControls = document.getElementById('replayControls');
+                        if (replayControls) {
+                            replayControls.style.display = 'flex';
+                        }
                         updateStatus(`📊 Loaded ${totalBars.toLocaleString()} bars (${startDate} to ${endDate}) - Ready for analysis!`);
 
                         // Update data inspector with first bar at user's start position
@@ -1430,7 +1629,19 @@ async def get_research_dashboard():
                         // CRITICAL: Ensure loading indicator is hidden after all setup
                         setTimeout(() => {
                             showLoading(false);
-                        }, 100);
+                            // Force hide any remaining loading indicators
+                            document.querySelectorAll('#loadingIndicator, #chartLoading, .loading, .chart-loading').forEach(el => {
+                                el.style.display = 'none';
+                                el.style.visibility = 'hidden';
+                                el.style.opacity = '0';
+                            });
+                            
+                            // Ensure tools are properly initialized
+                            if (currentTool === 'cursor') {
+                                selectTool('cursor');
+                            }
+                            console.log('🎉 Data loading completed, all systems ready');
+                        }, 1000); // Increased timeout to ensure everything is loaded
                     } else {
                         updateStatus(`Error: ${result.message}`);
                     }
@@ -1850,6 +2061,286 @@ async def get_research_dashboard():
             }
             
             
+            // Professional Chart Tools System
+            let currentTool = 'cursor';
+            let drawingMode = false;
+            let isTooltipEnabled = false;
+            let chartTooltip = null;
+            
+            // Trend line drawing variables
+            let isDrawingTrendLine = false;
+            let trendLineStart = null;
+            let currentTrendLine = null;
+            let trendLines = [];
+            
+            function selectTool(tool) {
+                // Remove active class from all tools
+                document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+                
+                // Add active class to selected tool
+                const toolBtn = document.getElementById(tool + 'Tool');
+                if (toolBtn) {
+                    toolBtn.classList.add('active');
+                }
+                
+                const previousTool = currentTool;
+                currentTool = tool;
+                console.log(`🔧 Tool switched: ${previousTool} → ${tool}`);
+                
+                // Update chart interaction mode
+                if (chart) {
+                    switch(tool) {
+                        case 'cursor':
+                            disableTooltip();
+                            chart.applyOptions({
+                                handleScroll: true,
+                                handleScale: true,
+                            });
+                            updateStatus('Cursor tool active - Click and drag to pan, scroll to zoom');
+                            break;
+                        case 'crosshair':
+                            enableTooltip();
+                            chart.applyOptions({
+                                handleScroll: true,
+                                handleScale: true,
+                            });
+                            updateStatus('Crosshair tool active - Hover over candles to see data tooltip');
+                            break;
+                        case 'trendline':
+                            disableTooltip();
+                            drawingMode = true;
+                            updateStatus('Trend line tool active - Click and drag to draw trend lines');
+                            console.log('📈 Trend line mode activated');
+                            break;
+                    }
+                }
+            }
+            
+            function enableTooltip() {
+                if (chart && !isTooltipEnabled) {
+                    chartTooltip = document.getElementById('chartTooltip');
+                    isTooltipEnabled = true;
+                    
+                    // Subscribe to crosshair move events
+                    chart.subscribeCrosshairMove(handleCrosshairMove);
+                    
+                    // Update crosshair visibility
+                    chart.applyOptions({
+                        crosshair: {
+                            mode: LightweightCharts.CrosshairMode.Normal,
+                            vertLine: {
+                                width: 1,
+                                color: '#4a90e2',
+                                style: LightweightCharts.LineStyle.Solid,
+                            },
+                            horzLine: {
+                                width: 1,
+                                color: '#4a90e2', 
+                                style: LightweightCharts.LineStyle.Solid,
+                            },
+                        },
+                    });
+                    
+                    console.log('✅ Crosshair tooltip enabled with enhanced visibility');
+                }
+            }
+            
+            function disableTooltip() {
+                if (chartTooltip) {
+                    chartTooltip.style.display = 'none';
+                }
+                isTooltipEnabled = false;
+                
+                // Reset crosshair to normal
+                if (chart) {
+                    chart.applyOptions({
+                        crosshair: {
+                            mode: LightweightCharts.CrosshairMode.Normal,
+                            vertLine: {
+                                width: 1,
+                                color: '#758696',
+                                style: LightweightCharts.LineStyle.Dotted,
+                            },
+                            horzLine: {
+                                width: 1,
+                                color: '#758696',
+                                style: LightweightCharts.LineStyle.Dotted,
+                            },
+                        },
+                    });
+                }
+                console.log('❌ Crosshair tooltip disabled, normal crosshair restored');
+            }
+            
+            function handleCrosshairMove(param) {
+                if (!isTooltipEnabled || !chartTooltip) {
+                    if (chartTooltip) chartTooltip.style.display = 'none';
+                    return;
+                }
+                
+                if (!param.time || !param.point) {
+                    chartTooltip.style.display = 'none';
+                    return;
+                }
+                
+                // Find the data point for this time
+                const dataPoint = param.seriesData.get(candlestickSeries);
+                if (!dataPoint) {
+                    chartTooltip.style.display = 'none';
+                    return;
+                }
+                
+                // Update tooltip content
+                const time = new Date(param.time * 1000);
+                document.getElementById('tooltipTime').textContent = time.toLocaleString();
+                document.getElementById('tooltipOpen').textContent = dataPoint.open.toFixed(5);
+                document.getElementById('tooltipHigh').textContent = dataPoint.high.toFixed(5);
+                document.getElementById('tooltipLow').textContent = dataPoint.low.toFixed(5);
+                document.getElementById('tooltipClose').textContent = dataPoint.close.toFixed(5);
+                
+                // Position tooltip near cursor
+                const chartRect = document.getElementById('chartDiv').getBoundingClientRect();
+                const x = param.point.x + 15; // Offset from cursor
+                const y = param.point.y - 10;
+                
+                // Keep tooltip within chart bounds
+                const tooltipRect = chartTooltip.getBoundingClientRect();
+                const maxX = chartRect.width - tooltipRect.width - 20;
+                const maxY = chartRect.height - tooltipRect.height - 20;
+                
+                chartTooltip.style.left = Math.min(x, maxX) + 'px';
+                chartTooltip.style.top = Math.max(10, Math.min(y, maxY)) + 'px';
+                chartTooltip.style.display = 'block';
+                
+                // Debug logging (remove in production)
+                console.log('🎯 Crosshair tooltip updated:', {
+                    time: time.toLocaleString(),
+                    data: dataPoint,
+                    position: { x, y }
+                });
+            }
+            
+            function fitChart() {
+                if (chart && window.fullChartData && window.fullChartData.length > 0) {
+                    const firstTime = window.fullChartData[0].time;
+                    const lastTime = window.fullChartData[window.fullChartData.length - 1].time;
+                    
+                    if (window.setProgrammaticRange) {
+                        window.setProgrammaticRange(firstTime, lastTime);
+                    }
+                    console.log('📏 Chart fitted to all data');
+                    updateStatus('Chart fitted to show all data');
+                }
+            }
+            
+            function resetZoom() {
+                if (chart && window.fullChartData && window.fullChartData.length > 0) {
+                    // Reset to initial zoom level (33% of data)
+                    const totalBars = window.fullChartData.length;
+                    const barsToShow = Math.min(500, Math.max(100, Math.floor(totalBars / 3)));
+                    const currentPosition = window.currentBacktestPosition || 0;
+                    const currentTime = window.fullChartData[currentPosition].time;
+                    
+                    const avgTimeStep = (window.fullChartData[totalBars - 1].time - window.fullChartData[0].time) / totalBars;
+                    const rangeSeconds = barsToShow * avgTimeStep;
+                    
+                    if (window.setProgrammaticRange) {
+                        window.setProgrammaticRange(
+                            Math.max(window.fullChartData[0].time, currentTime - rangeSeconds * 0.1),
+                            currentTime + rangeSeconds * 0.9
+                        );
+                    }
+                    console.log('🎯 Zoom reset to default level');
+                    updateStatus('Zoom reset to default level');
+                }
+            }
+            
+            function clearDrawings() {
+                // Clear all trend lines
+                if (chart && trendLines.length > 0) {
+                    const count = trendLines.length;
+                    trendLines.forEach(line => {
+                        try {
+                            chart.removeSeries(line);
+                        } catch (e) {
+                            console.warn('Error removing trend line:', e);
+                        }
+                    });
+                    trendLines = [];
+                    console.log('🗑️ Cleared all trend lines');
+                    updateStatus(`Cleared ${count} trend lines`);
+                } else {
+                    console.log('🗑️ No trend lines to clear');
+                    updateStatus('No drawings to clear');
+                }
+            }
+            
+            // Trend line drawing functionality
+            function handleTrendLineClick(param) {
+                if (!param.time || !param.point) {
+                    return;
+                }
+                
+                if (!isDrawingTrendLine) {
+                    // Start drawing trend line
+                    isDrawingTrendLine = true;
+                    trendLineStart = {
+                        time: param.time,
+                        price: param.point.y ? candlestickSeries.coordinateToPrice(param.point.y) : 0
+                    };
+                    updateStatus('Click second point to complete trend line');
+                    console.log('📈 Trend line started at:', trendLineStart);
+                } else {
+                    // Complete trend line
+                    const trendLineEnd = {
+                        time: param.time,
+                        price: param.point.y ? candlestickSeries.coordinateToPrice(param.point.y) : 0
+                    };
+                    
+                    // Create trend line
+                    createTrendLine(trendLineStart, trendLineEnd);
+                    
+                    // Reset drawing state
+                    isDrawingTrendLine = false;
+                    trendLineStart = null;
+                    updateStatus('Trend line created - Click to start another or switch tools');
+                    console.log('📈 Trend line completed');
+                }
+            }
+            
+            function createTrendLine(start, end) {
+                if (!chart) return;
+                
+                try {
+                    // Create line series for trend line
+                    const trendLine = chart.addLineSeries({
+                        color: '#FFD700', // Gold color
+                        lineWidth: 2,
+                        lineStyle: LightweightCharts.LineStyle.Solid,
+                        crosshairMarkerVisible: false,
+                        lastValueVisible: false,
+                        priceLineVisible: false,
+                    });
+                    
+                    // Set line data
+                    const lineData = [
+                        { time: start.time, value: start.price },
+                        { time: end.time, value: end.price }
+                    ];
+                    
+                    trendLine.setData(lineData);
+                    trendLines.push(trendLine);
+                    
+                    console.log('📈 Trend line created:', {
+                        start: { time: new Date(start.time * 1000), price: start.price },
+                        end: { time: new Date(end.time * 1000), price: end.price }
+                    });
+                } catch (error) {
+                    console.error('Error creating trend line:', error);
+                    updateStatus('Error creating trend line');
+                }
+            }
+            
             // Drag functionality temporarily removed - focusing on core backtesting features
             
             function updateStatus(message) {
@@ -1857,12 +2348,30 @@ async def get_research_dashboard():
             }
             
             function showLoading(show) {
-                const indicator = document.getElementById('loadingIndicator');
-                if (indicator) {
-                    indicator.style.display = show ? 'block' : 'none';
-                    // Debug logging to track loading state
-                    console.log(show ? '🔄 Loading indicator shown' : '✅ Loading indicator hidden');
-                }
+                // More aggressive loading indicator hiding
+                const loadingSelectors = [
+                    '#loadingIndicator',
+                    '#chartLoading',
+                    '.loading',
+                    '.chart-loading'
+                ];
+                
+                loadingSelectors.forEach(selector => {
+                    const elements = document.querySelectorAll(selector);
+                    elements.forEach(element => {
+                        if (show) {
+                            element.style.display = 'block';
+                            element.style.visibility = 'visible';
+                            element.style.opacity = '1';
+                        } else {
+                            element.style.display = 'none';
+                            element.style.visibility = 'hidden';
+                            element.style.opacity = '0';
+                        }
+                    });
+                });
+                
+                console.log(show ? '🔄 Loading indicators shown' : '✅ All loading indicators hidden');
             }
             
             function showWelcomeMessage() {
@@ -2023,15 +2532,28 @@ async def get_research_dashboard():
             // Initialize app after TradingView library loads
             function initializeApp() {
                 console.log('✅ Initializing application...');
-                initChart();
-                initWebSocket();
-                loadAvailableSymbols();
-                loadAvailableDateRanges();
-                
-                // Show welcome message on initial load
-                showWelcomeMessage();
-                
-                // Status will be updated by loadAvailableDateRanges()
+                try {
+                    initChart();
+                    console.log('✅ Chart initialized successfully');
+                    
+                    initWebSocket();
+                    console.log('✅ WebSocket initialized');
+                    
+                    loadAvailableSymbols();
+                    console.log('✅ Loading symbols...');
+                    
+                    loadAvailableDateRanges();
+                    console.log('✅ Loading date ranges...');
+                    
+                    // Show welcome message on initial load
+                    showWelcomeMessage();
+                    console.log('✅ Welcome message shown');
+                    
+                    // Status will be updated by loadAvailableDateRanges()
+                } catch (error) {
+                    console.error('❌ Error during app initialization:', error);
+                    updateStatus('Error: Failed to initialize dashboard');
+                }
             }
             
             // Load available date ranges for user selection (no auto-loading)

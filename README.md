@@ -35,6 +35,7 @@ An enterprise-grade automated trading system that combines Fibonacci retracement
 - Python 3.9 or higher
 - MetaTrader 5 terminal installed
 - 16GB RAM minimum (32GB recommended for production)
+- PostgreSQL (production) or SQLite (development) - automatic switching
 
 ### Installation
 
@@ -122,11 +123,19 @@ copy config\development.yaml.template config\development.yaml
 ```
 
 Key configuration options:
+- Database settings (PostgreSQL/SQLite automatic switching)
 - MT5 connection settings
 - Trading parameters (risk, position sizing)
 - Fibonacci levels
 - ML model parameters
 - Logging and monitoring settings
+
+### Database Configuration
+The system automatically switches between databases:
+- **Desktop/Production**: PostgreSQL (configured in `config.yaml`)
+- **Laptop/Development**: SQLite (automatic fallback when PostgreSQL unavailable)
+
+See [Database Setup Guide](docs/development/DATABASE_SETUP.md) for detailed configuration.
 
 ## 📚 Documentation
 
@@ -141,6 +150,7 @@ Key configuration options:
 - **[Deployment Guide](docs/deployment/DEPLOYMENT_GUIDE.md)**: Production deployment instructions
 - **[API Specification](docs/api/API_SPECIFICATION.md)**: Complete API documentation
 - **[Quality Assurance](docs/development/QUALITY_ASSURANCE.md)**: QA framework and standards
+- **[Chart Tools Guide](docs/user-guide/CHART_TOOLS_GUIDE.md)**: TradingView-style chart tools and navigation
 
 ## 🧪 Testing
 

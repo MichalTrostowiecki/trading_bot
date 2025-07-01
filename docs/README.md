@@ -17,11 +17,13 @@ This documentation is organized into the following categories:
 
 ### 👥 User Guide
 - **[Research Dashboard Guide](user-guide/RESEARCH_DASHBOARD_GUIDE.md)** - How to use the dashboard
+- **[Chart Tools Guide](user-guide/CHART_TOOLS_GUIDE.md)** - TradingView-style chart tools and navigation
 - **[Visual Verification](user-guide/VISUAL_VERIFICATION.md)** - Strategy verification guide
 
 ### 🛠️ Development
 - **[Git Workflow Guide](development/GIT_WORKFLOW_GUIDE.md)** - Development workflow
 - **[Git Commands Reference](development/GIT_COMMANDS_REFERENCE.md)** - Git command reference
+- **[Database Setup](development/DATABASE_SETUP.md)** - Dual database configuration (PostgreSQL/SQLite)
 - **[Testing Strategy](development/TESTING_STRATEGY.md)** - Testing guidelines
 - **[Quality Assurance](development/QUALITY_ASSURANCE.md)** - QA standards
 

@@ -15,11 +15,19 @@
   - `test(fibonacci): add unit tests for retracement calculations`
   - `fix(mt5): resolve connection timeout issues`
 
-#### Documentation Updates
-- **Update documentation simultaneously** with code changes
-- Keep all specs and guides current with implementation
-- Update phase documentation as tasks are completed
-- Maintain consistency between code and documentation
+#### Documentation Updates - CRITICAL REQUIREMENT ⚠️
+- **MANDATORY**: Update documentation simultaneously with ALL code changes
+- **NEVER** complete a task without updating relevant documentation
+- **ALWAYS** update the following when making changes:
+  - Architecture docs when changing system design
+  - API docs when modifying endpoints or data structures
+  - User guides when changing UI or functionality
+  - Development docs when changing workflows or setup
+  - README files when adding new features or tools
+- **Keep all specs and guides current** with implementation
+- **Update phase documentation** as tasks are completed
+- **Maintain consistency** between code and documentation
+- **Documentation debt is technical debt** - treat it as such
 
 #### Project Context
 - **SAAS Project**: Proprietary license, not open source
@@ -37,8 +45,9 @@
 1. **Document first, then implement**
 2. **Test-driven development**
 3. **Commit early and often**
-4. **Keep documentation in sync with code**
+4. **CRITICAL: Keep documentation in sync with code - NO EXCEPTIONS**
 5. **Follow the phase-by-phase plan**
+6. **Documentation completeness is part of task completion**
 
 ### Current Project Status
 - **Phase**: Phase 3 - Visual Backtesting & Research System (IN PROGRESS)
@@ -109,7 +118,7 @@ When working on this project:
 1. **System is PRODUCTION READY** - fully functional automated trading bot
 2. **MT5 Integration**: Real BlueberryMarkets demo account (Login: 12605399)
 3. **Web Dashboard**: Available at http://localhost:8000 with live charts and controls
-4. **Research Dashboard**: ✅ FULLY OPERATIONAL at http://localhost:9000 for backtesting
+4. **Research Dashboard**: ✅ FULLY OPERATIONAL at http://localhost:8001 for backtesting
 5. **Chart Features**: Enhanced Fibonacci visualization with proper swing detection ✅ WORKING
 6. **Order Placement**: Successfully placing real MT5 orders with proper risk management
 7. **Deployment**: Ready for VPS deployment for 24/7 automated trading
@@ -117,37 +126,106 @@ When working on this project:
 9. **Testing**: System tested and verified with live MT5 connection
 10. **Backtesting**: ✅ VISUAL VERIFICATION SYSTEM OPERATIONAL
 
+### 📚 DOCUMENTATION REQUIREMENTS - MANDATORY FOR ALL AGENTS
+
+**🚨 CRITICAL: Documentation is NOT optional - it is REQUIRED for task completion**
+
+#### Before Starting Any Task:
+1. **Read relevant docs** to understand current state
+2. **Identify which docs** will need updates based on your changes
+3. **Plan documentation updates** as part of your task
+
+#### During Implementation:
+1. **Update docs in real-time** as you make changes
+2. **Document new features, endpoints, or configuration changes**
+3. **Update existing docs** if your changes affect them
+
+#### Before Completing Any Task:
+1. **VERIFY all relevant documentation is updated**
+2. **Check that examples and code snippets still work**
+3. **Update README files if you add new tools or features**
+4. **Do NOT mark task as complete** until docs are updated
+
+#### Documentation Categories to Update:
+- **Architecture docs** (`docs/architecture/`) - For system design changes
+- **API docs** (`docs/api/`) - For endpoint or data structure changes  
+- **User guides** (`docs/user-guide/`) - For UI or functionality changes
+- **Development docs** (`docs/development/`) - For workflow or setup changes
+- **Main README** - For new features, tools, or major changes
+- **Tool READMEs** (`tools/README.md`, `tests/README.md`) - For new utilities
+
+#### Quality Standards:
+- **Examples must work** - test all code examples in docs
+- **Links must be valid** - verify all internal documentation links
+- **Consistent formatting** - follow existing documentation style
+- **Clear explanations** - write for both beginners and experts
+
+**Remember: Undocumented features are broken features. Documentation debt is technical debt.**
+
 ### Next Session Continuation Points
 For the next Claude agent to continue this work:
 
-1. **CRITICAL ISSUE**: Research dashboard servers start but aren't accessible via browser (Connection refused)
-2. **Likely Cause**: WSL networking issue - servers bind to ports but Windows can't access them
-3. **What Was Working**: Dashboard at http://localhost:9000 displayed 4 fractals correctly before visual update attempt
-4. **What Went Wrong**: Created multiple new dashboard files instead of just updating CSS
-5. **Files to Clean Up**:
-   - /mnt/d/trading_bot/minimal_dashboard.py
-   - /mnt/d/trading_bot/simple_tradingview_dashboard.py  
-   - /mnt/d/trading_bot/working_dashboard.py
-   - /mnt/d/trading_bot/test_server.py
-   - /mnt/d/trading_bot/simple_fractal_test.py
-6. **Original Working File**: `/mnt/d/trading_bot/src/research/dashboard/research_api.py`
-7. **User Request**: "Don't break anything" - wanted visual updates only, not new architecture
-8. **Next Steps**:
-   - Diagnose WSL networking issue (check WSL version, port forwarding)
-   - Clean up experimental files
-   - Restore original dashboard functionality
-   - Update ONLY CSS for TradingView look
-9. **Testing Commands**:
-   ```bash
-   # Check WSL version
-   wsl --version
-   
-   # Test basic connectivity
-   curl http://localhost:9000
-   
-   # Start research dashboard with explicit localhost binding
-   python3 -m uvicorn src.research.dashboard.research_api:app --host localhost --port 9000
-   ```
+## **CURRENT DASHBOARD STATUS (July 1, 2025)**
+- **Research Dashboard**: Running at http://localhost:8001 (port changed from 9000)
+- **Server Command**: `python3 -m uvicorn src.research.dashboard.research_api:app --host 127.0.0.1 --port 8001`
+- **Performance**: TradingView-style optimizations implemented but issues remain
+
+## **CRITICAL ISSUES TO FIX**
+
+### 1. **Browser Refresh Problem** 🔴 HIGH PRIORITY
+- **Issue**: Browser refresh is extremely slow/hangs (still not resolved)
+- **Cause**: Unknown - server responds fast (0.004s) but browser refresh fails
+- **Status**: Multiple attempts made, still problematic
+- **Next Steps**: 
+  - Investigate browser caching issues
+  - Check for JavaScript memory leaks
+  - Consider progressive data loading approach
+  - Test with smaller data samples
+
+### 2. **Chart Data Loading Logic** 🔴 HIGH PRIORITY  
+- **Issue**: Chart loads ALL data instead of progressive loading up to user's start date
+- **Current**: `candlestickSeries.setData(window.fullChartData)` loads everything
+- **Required**: Progressive loading - show only data up to current backtesting position
+- **Location**: `src/research/dashboard/research_api.py` lines 1083-1087
+- **Fix Needed**: Revert to progressive data loading for backtesting experience
+
+### 3. **Performance Optimization Needed**
+- **Data Size**: 50k+ bars causing browser stress
+- **Current Approach**: TradingView-style (loads all data)
+- **Better Approach**: Hybrid - progressive for backtesting, full for analysis
+
+## **RECENT CHANGES MADE**
+1. ✅ Implemented TradingView-style data handling
+2. ✅ Fixed chart zoom logic using `setVisibleRange()`
+3. ✅ Added proper TradingView chart performance settings
+4. ✅ Simplified data size warnings
+5. ✅ Enhanced trend line drawing functionality
+6. ❌ Browser refresh still problematic
+7. ❌ Chart data loading not progressive
+
+## **QUICK START COMMANDS**
+```bash
+# Start dashboard server
+cd /mnt/c/Users/trost/OneDrive/Desktop/trading-bot/trading_bot
+python3 -m uvicorn src.research.dashboard.research_api:app --host 127.0.0.1 --port 8001
+
+# Test server response
+curl -s -o /dev/null -w "%{time_total} seconds - HTTP %{http_code}" http://localhost:8001/
+
+# Check if server is running
+ps aux | grep "uvicorn.*8001" | grep -v grep
+```
+
+## **PRIORITY FIXES FOR NEXT SESSION**
+1. **Fix browser refresh performance** (investigate caching, memory leaks)
+2. **Implement progressive chart data loading** (backtesting mode)
+3. **Add data pagination/chunking** for large datasets
+4. **Test with smaller data samples** to isolate performance issues
+
+## **FILES TO FOCUS ON**
+- `src/research/dashboard/research_api.py` (lines 1083-1087: chart data loading)
+- Browser developer tools (check for memory leaks, network issues)
+- Consider implementing data virtualization or lazy loading
 
 ### Development Environment
 - **User Platform**: Windows with WSL for communication  
