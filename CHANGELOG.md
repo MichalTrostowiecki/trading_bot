@@ -5,6 +5,39 @@ All notable changes to the Fibonacci Trading Bot project will be documented in t
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2025-07-01
+
+### Added
+- Comprehensive fractal visualization system with proper TradingView marker management
+- Professional FractalMarkerManager class following TradingView Lightweight Charts best practices
+- Enhanced debugging system for fractal timing analysis with detailed console logging
+- Request throttling system to prevent browser resource exhaustion
+- Stale response filtering to ignore outdated backend responses during navigation
+
+### Fixed
+- **Critical timestamp mismatch** between frontend chart and backend strategy (4-day discrepancy)
+- Backend synchronization by converting absolute data positions to relative positions
+- TradingView marker state management preventing fractal disappearance during navigation
+- Massive position jumps caused by incorrect currentPosition management in handleBacktestUpdate
+- Chart time jumping when clicking next bar through incremental updates instead of full resets
+- Fractal arrow directions (red arrows now point up for highs, blue arrows point down for lows)
+- ERR_INSUFFICIENT_RESOURCES browser errors through API call optimization
+- Position calculation bugs causing date jumps during navigation
+
+### Changed
+- Implemented proper TradingView setMarkers() pattern that preserves all existing markers
+- Separated frontend user positions from backend data positions for better synchronization
+- Replaced complex marker filtering with clean marker state management
+- Enhanced auto-scroll behavior to reduce aggressive chart movement
+- Improved progressive data loading to maintain chart stability
+
+### Technical Improvements
+- Added proper marker accumulation system that prevents marker loss
+- Implemented sequence tracking for async request management
+- Added comprehensive fractal timing debugging for development
+- Optimized backend call frequency with intelligent throttling
+- Enhanced error handling for network resource limitations
+
 ## [2.5.3] - 2025-06-28
 
 ### Added
