@@ -351,11 +351,6 @@ async def get_research_dashboard():
                 </div>
                 <button onclick="loadData()">Load Data</button>
                 <button onclick="runBacktest()">Run Backtest</button>
-                <button onclick="showReplayControls()">Show Controls</button>
-                <button onclick="loadAllStrategyElements()">Load All Strategy Elements</button>
-                <button onclick="resetToStart()">Reset to Start</button>
-                <button onclick="testMarkers()">Test Markers</button>
-                <button onclick="toggleFullscreen()">Fullscreen</button>
             </div>
         </div>
         
@@ -1662,22 +1657,6 @@ async def get_research_dashboard():
                 }
             }
             
-            // Reset to start position for progressive replay
-            async function resetToStart() {
-                if (totalBars === 0) return;
-
-                try {
-                    // Reset to position 0 and update chart
-                    currentPosition = 0;
-                    const dataPosition = window.userStartOffset + currentPosition;
-                    await fetch(`/api/backtest/jump/${dataPosition}`, { method: 'POST' });
-                    updateChartProgressive(currentPosition);
-                    updatePositionDisplay();
-                    updateStatus('📍 Reset to start position - ready for progressive replay!');
-                } catch (error) {
-                    console.error('Error resetting to start:', error);
-                }
-            }
 
             async function replayAction(action) {
                 if (totalBars === 0) return;
@@ -1838,52 +1817,6 @@ async def get_research_dashboard():
                 }
             }
             
-            // Test function to verify markers are working
-            function testMarkers() {
-                if (!candlestickSeries || !marketData || marketData.length < 20) {
-                    alert('Please load data first');
-                    return;
-                }
-                
-                // Get the currently visible data
-                const visibleData = candlestickSeries.data();
-                if (!visibleData || visibleData.length === 0) {
-                    alert('No visible data on chart');
-                    return;
-                }
-                
-                // Create test markers on visible bars
-                const testMarkers = [];
-                const indicesToMark = [
-                    Math.floor(visibleData.length * 0.2),
-                    Math.floor(visibleData.length * 0.5),
-                    Math.floor(visibleData.length * 0.8)
-                ];
-                
-                indicesToMark.forEach((index, i) => {
-                    if (index < visibleData.length) {
-                        const bar = visibleData[index];
-                        
-                        testMarkers.push({
-                            time: bar.time,
-                            position: i % 2 === 0 ? 'aboveBar' : 'belowBar',
-                            color: '#FF0000',
-                            shape: 'circle',
-                            text: `TEST ${i}`,
-                            size: 2
-                        });
-                        
-                        console.log(`Test marker ${i} at visible bar ${index}:`, {
-                            time: bar.time,
-                            date: new Date(bar.time * 1000).toISOString()
-                        });
-                    }
-                });
-                
-                console.log('Setting test markers on visible bars:', testMarkers);
-                candlestickSeries.setMarkers(testMarkers);
-                alert(`Set ${testMarkers.length} test markers on visible bars.`);
-            }
             
             function stopReplay() {
                 if (playInterval) {
@@ -1916,39 +1849,6 @@ async def get_research_dashboard():
                 document.getElementById('maxDrawdown').textContent = `${(results.max_drawdown || 0).toFixed(1)}%`;
             }
             
-            function showReplayControls() {
-                const replayControls = document.getElementById('replayControls');
-                if (replayControls) {
-                    // Force visibility with multiple CSS properties
-                    replayControls.style.display = 'flex';
-                    replayControls.style.visibility = 'visible';
-                    replayControls.style.opacity = '1';
-                    replayControls.style.position = 'fixed';
-                    replayControls.style.bottom = '20px';
-                    replayControls.style.left = '50%';
-                    replayControls.style.transform = 'translateX(-50%)';
-                    replayControls.style.zIndex = '9999';
-                    replayControls.style.background = 'rgba(45, 45, 45, 0.98)';
-                    replayControls.style.border = '3px solid #4CAF50';
-                    replayControls.style.borderRadius = '8px';
-                    replayControls.style.padding = '15px 20px';
-                    replayControls.style.minWidth = '400px';
-                    replayControls.style.userSelect = 'none';
-                    
-                    // Make the element glow to ensure it's visible
-                    replayControls.style.boxShadow = '0 0 20px #4CAF50, 0 8px 20px rgba(0, 0, 0, 0.8)';
-                    
-                    // Drag functionality removed - focus on core features
-                    
-                    console.log('✅ Replay controls should now be visible and draggable!');
-                } else {
-                    console.error('❌ Replay controls element not found!');
-                    // Try to find all elements with replay-related IDs
-                    console.log('🔍 Searching for replay controls in DOM...');
-                    const allElements = document.querySelectorAll('[id*="replay"], [class*="replay"]');
-                    console.log('Found replay elements:', allElements);
-                }
-            }
             
             // Drag functionality temporarily removed - focusing on core backtesting features
             
@@ -2018,15 +1918,6 @@ async def get_research_dashboard():
                 }
             }
             
-            function toggleFullscreen() {
-                if (!document.fullscreenElement) {
-                    document.documentElement.requestFullscreen();
-                } else {
-                    if (document.exitFullscreen) {
-                        document.exitFullscreen();
-                    }
-                }
-            }
             
             // Load available symbols from database
             async function loadAvailableSymbols() {

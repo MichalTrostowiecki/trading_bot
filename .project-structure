@@ -1,0 +1,102 @@
+# Fibonacci Trading Bot - Enterprise Project Structure
+
+## Directory Organization
+
+### 📁 /src/ - Source Code
+**Purpose**: All production source code organized by functional modules
+- `core/` - Core trading algorithms (fractal detection, etc.)
+- `data/` - Data management, database interfaces, importers
+- `strategy/` - Trading strategies and backtesting engine
+- `execution/` - Order execution and trading engine
+- `monitoring/` - Logging, monitoring, and web dashboard
+- `research/` - Research tools and analysis dashboard
+- `ml/` - Machine learning components (planned)
+- `utils/` - Shared utilities and configuration
+- `backtesting/` - Backtesting framework
+
+### 📁 /docs/ - Documentation (Organized by Category)
+**Purpose**: Comprehensive documentation organized by audience and purpose
+- `architecture/` - System design, strategy specs, ML preparation
+- `api/` - API documentation and dependencies matrix
+- `user-guide/` - End-user guides and tutorials
+- `development/` - Developer guides, git workflow, testing, QA
+- `deployment/` - Production deployment instructions
+
+### 📁 /tests/ - Test Suite (Organized by Type)
+**Purpose**: Comprehensive test coverage with clear organization
+- `unit/` - Fast unit tests for individual components
+- `integration/` - Integration tests for component interaction
+- `e2e/` - End-to-end system tests (planned)
+- `fixtures/` - Test data and HTML fixtures
+- `performance/` - Performance testing (structure ready)
+
+### 📁 /tools/ - Development Tools & Utilities
+**Purpose**: Development lifecycle tools and utilities
+- `scripts/` - Setup, installation, and management scripts
+- `utilities/` - Database setup, data import utilities
+- `development/` - Development servers, dashboard runners
+
+### 📁 /config/ - Configuration
+**Purpose**: Environment and application configuration
+- Template files for different environments
+- Strategy parameters configuration
+- Database and service configurations
+
+### 📁 /data/ - Data Storage
+**Purpose**: Historical data, databases, and data files
+- CSV data imports
+- SQLite/PostgreSQL databases
+- Market data storage
+
+### 📁 /logs/ - Application Logs
+**Purpose**: Structured logging with categorization
+- `errors/` - Error logs by date
+- `trades/` - Trading activity logs
+- `performance/` - Performance monitoring logs
+
+### 📁 /archives/ - Legacy Content
+**Purpose**: Historical documentation and deprecated files
+- `legacy-docs/` - Previous session summaries and debug docs
+
+### 📁 /screenshots/ - Visual Documentation
+**Purpose**: Screenshots for documentation and examples
+- Market examples and UI screenshots
+
+## Enterprise Standards Implemented
+
+### ✅ Documentation Organization
+- Clear separation by audience (users, developers, architects)
+- Comprehensive README files for each section
+- Centralized documentation index
+- Legacy content properly archived
+
+### ✅ Test Organization
+- Clear separation of test types (unit, integration, e2e)
+- Dedicated fixtures directory
+- Test documentation with running instructions
+- Framework ready for CI/CD integration
+
+### ✅ Development Tools
+- Organized scripts by purpose
+- Clear separation of utilities vs development tools
+- Proper documentation for each tool category
+
+### ✅ Source Code Structure
+- Logical module separation
+- Clean import paths
+- Scalable architecture for future features
+
+### ✅ Configuration Management
+- Environment-specific configurations
+- Template-based configuration system
+- Centralized configuration location
+
+## Maintenance Guidelines
+
+1. **Keep documentation current** - Update docs when code changes
+2. **Maintain test organization** - New tests go in appropriate directories
+3. **Archive old content** - Move outdated docs to archives/
+4. **Use proper naming** - Follow established naming conventions
+5. **Document new tools** - Update README files when adding utilities
+
+This structure supports enterprise-level development practices and scales for team collaboration.

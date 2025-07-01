@@ -132,15 +132,15 @@ Key configuration options:
 
 ### Complete Documentation Suite
 - **[Project Documentation](PROJECT_DOCUMENTATION.md)**: Complete project overview
-- **[Core Strategy Specification](docs/CORE_STRATEGY_SPECIFICATION.md)**: Detailed Fibonacci strategy
-- **[Git Workflow Guide](docs/GIT_WORKFLOW_GUIDE.md)**: Git workflow and collaboration best practices
-- **[Git Commands Reference](docs/GIT_COMMANDS_REFERENCE.md)**: Quick Git commands reference
-- **[Phase 1 Specification](docs/PHASE_1_DETAILED_SPECIFICATION.md)**: Detailed implementation guide
-- **[Dependencies Matrix](docs/DEPENDENCIES_MATRIX.md)**: Complete dependency mapping
-- **[Testing Strategy](docs/TESTING_STRATEGY.md)**: Comprehensive testing approach
-- **[Deployment Guide](docs/DEPLOYMENT_GUIDE.md)**: Production deployment instructions
-- **[API Specification](docs/API_SPECIFICATION.md)**: Complete API documentation
-- **[Quality Assurance](docs/QUALITY_ASSURANCE.md)**: QA framework and standards
+- **[Documentation Index](docs/README.md)**: Organized documentation directory
+- **[Core Strategy Specification](docs/architecture/CORE_STRATEGY_SPECIFICATION.md)**: Detailed Fibonacci strategy
+- **[Git Workflow Guide](docs/development/GIT_WORKFLOW_GUIDE.md)**: Git workflow and collaboration best practices
+- **[Git Commands Reference](docs/development/GIT_COMMANDS_REFERENCE.md)**: Quick Git commands reference
+- **[Dependencies Matrix](docs/api/DEPENDENCIES_MATRIX.md)**: Complete dependency mapping
+- **[Testing Strategy](docs/development/TESTING_STRATEGY.md)**: Comprehensive testing approach
+- **[Deployment Guide](docs/deployment/DEPLOYMENT_GUIDE.md)**: Production deployment instructions
+- **[API Specification](docs/api/API_SPECIFICATION.md)**: Complete API documentation
+- **[Quality Assurance](docs/development/QUALITY_ASSURANCE.md)**: QA framework and standards
 
 ## 🧪 Testing
 
@@ -158,7 +158,7 @@ pytest tests/ -v --cov=src --cov-report=html
 
 ## 🚀 Deployment
 
-See [Deployment Guide](docs/DEPLOYMENT_GUIDE.md) for detailed deployment instructions.
+See [Deployment Guide](docs/deployment/DEPLOYMENT_GUIDE.md) for detailed deployment instructions.
 
 ## 🤝 Contributing
 

@@ -1,6 +1,0 @@
-Requirement already satisfied: numpy in c:\users\trost\appdata\local\programs\python\python311\lib\site-packages (1.24.3)
-Requirement already satisfied: pandas in c:\users\trost\appdata\local\programs\python\python311\lib\site-packages (2.0.3)
-Requirement already satisfied: python-dateutil>=2.8.2 in c:\users\trost\appdata\roaming\python\python311\site-packages (from pandas) (2.8.2)
-Requirement already satisfied: pytz>=2020.1 in c:\users\trost\appdata\local\programs\python\python311\lib\site-packages (from pandas) (2023.3)
-Requirement already satisfied: tzdata>=2022.1 in c:\users\trost\appdata\local\programs\python\python311\lib\site-packages (from pandas) (2025.2)
-Requirement already satisfied: six>=1.5 in c:\users\trost\appdata\roaming\python\python311\site-packages (from python-dateutil>=2.8.2->pandas) (1.16.0)
