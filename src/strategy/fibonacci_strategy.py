@@ -5,7 +5,7 @@ Implements fractal detection, swing analysis, and Fibonacci-based entry signals.
 
 import numpy as np
 import pandas as pd
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Any
 from dataclasses import dataclass
 import logging
 
@@ -25,8 +25,9 @@ class Swing:
     start_fractal: Fractal
     end_fractal: Fractal
     direction: str  # 'up' or 'down'
-    points: float  # Price difference
+    points: float  # Price difference (magnitude)
     bars: int      # Number of bars
+    is_dominant: bool = False  # True if this is the dominant swing
 
 @dataclass
 class FibonacciLevel:
@@ -63,7 +64,8 @@ class FibonacciStrategy:
                  fractal_period: int = 5,
                  min_swing_points: float = 50.0,
                  fibonacci_levels: List[float] = None,
-                 risk_reward_ratio: float = 2.0):
+                 risk_reward_ratio: float = 2.0,
+                 lookback_candles: int = 140):
         """
         Initialize Fibonacci Strategy.
         
@@ -72,10 +74,12 @@ class FibonacciStrategy:
             min_swing_points: Minimum price movement to consider a valid swing
             fibonacci_levels: Fibonacci retracement levels to monitor
             risk_reward_ratio: Risk/reward ratio for trade management
+            lookback_candles: Number of candles to look back for swing analysis
         """
         self.fractal_period = fractal_period
         self.min_swing_points = min_swing_points
         self.fibonacci_levels = fibonacci_levels or [0.236, 0.382, 0.500, 0.618, 0.786]
+        self.lookback_candles = lookback_candles
         self.risk_reward_ratio = risk_reward_ratio
         
         # Strategy state
@@ -87,6 +91,7 @@ class FibonacciStrategy:
         # Current analysis state
         self.current_bar = 0
         self.dominant_trend = None  # 'up' or 'down'
+        self.current_dominant_swing = None  # Track current dominant swing for invalidation
         
     def detect_fractals(self, df: pd.DataFrame, current_index: int) -> Optional[Fractal]:
         """
@@ -150,63 +155,397 @@ class FibonacciStrategy:
             
         return None
     
+    def limit_to_two_swings(self, recent_swings: List[Swing]) -> None:
+        """
+        Limit display to maximum 2 swings: 1 dominant + 1 most recent opposite.
+        This creates clean Elliott Wave market structure visualization.
+        """
+        if not self.current_dominant_swing:
+            return
+            
+        # Find most recent swing in opposite direction to dominant
+        dominant_direction = self.current_dominant_swing.direction
+        opposite_direction = 'down' if dominant_direction == 'up' else 'up'
+        
+        most_recent_opposite = None
+        for swing in reversed(recent_swings):
+            if swing.direction == opposite_direction and swing != self.current_dominant_swing:
+                most_recent_opposite = swing
+                break
+        
+        # Mark swings for removal (those not in our clean 2-swing display)
+        swings_to_keep = [self.current_dominant_swing]
+        if most_recent_opposite:
+            swings_to_keep.append(most_recent_opposite)
+        
+        # Remove excess swings from the main list - keep swings that are in our display OR within lookback window
+        lookback_start = max(0, self.current_bar - self.lookback_candles) if hasattr(self, 'current_bar') and self.current_bar is not None else 0
+        self.swings = [swing for swing in self.swings if swing in swings_to_keep or swing.end_fractal.bar_index >= lookback_start]
+        
+        logger.debug(f"📊 CLEAN DISPLAY: Keeping {len(swings_to_keep)} swings (1 dominant + {len(swings_to_keep)-1} opposite)")
+    
     def identify_swing(self, new_fractal: Fractal) -> Optional[Swing]:
         """
         Identify swing when new fractal is detected.
-        Look for opposite fractal to create swing.
+        
+        🚨 CRITICAL FIX: This method now only checks if we need to extend/update the dominant swing
+        instead of creating multiple swings. All swing creation is handled by recalculate_swings_for_lookback_window.
         """
         if not self.fractals:
             return None
-            
-        # Find the most recent opposite fractal
-        opposite_type = 'low' if new_fractal.fractal_type == 'high' else 'high'
+
+        # Find absolute extremes within lookback period
+        if hasattr(self, 'current_bar') and self.current_bar is not None:
+            lookback_start = max(0, self.current_bar - self.lookback_candles)
+        else:
+            lookback_start = 0
+
+        # Check all fractals (including new one) within the lookback window
+        all_fractals = self.fractals + [new_fractal]
+        fractals_in_window = [f for f in all_fractals if f.bar_index >= lookback_start]
+
+        if len(fractals_in_window) < 2:
+            return None
+
+        # Find absolute extremes
+        highest_high_fractal = None
+        lowest_low_fractal = None
+        highest_price = float('-inf')
+        lowest_price = float('inf')
+
+        for fractal in fractals_in_window:
+            if fractal.fractal_type == 'high' and fractal.price > highest_price:
+                highest_price = fractal.price
+                highest_high_fractal = fractal
+            elif fractal.fractal_type == 'low' and fractal.price < lowest_price:
+                lowest_price = fractal.price
+                lowest_low_fractal = fractal
+
+        if not highest_high_fractal or not lowest_low_fractal:
+            return None
+
+        # Check if current dominant swing needs to be updated/extended
+        current_swing = self.current_dominant_swing
         
-        for fractal in reversed(self.fractals):
-            if fractal.fractal_type == opposite_type:
-                # Calculate swing properties
-                points = abs(new_fractal.price - fractal.price)
-                bars = abs(new_fractal.bar_index - fractal.bar_index)
-                
-                # Check if swing meets minimum criteria
-                if points >= self.min_swing_points:
-                    direction = 'up' if new_fractal.fractal_type == 'high' else 'down'
-                    
-                    swing = Swing(
-                        start_fractal=fractal,
-                        end_fractal=new_fractal,
-                        direction=direction,
-                        points=points,
-                        bars=bars
-                    )
-                    
-                    return swing
-                break
-                
+        # Determine what the swing should be (connecting absolute extremes)
+        if highest_high_fractal.bar_index < lowest_low_fractal.bar_index:
+            # High came first, then low = DOWN swing
+            ideal_direction = 'down'
+            ideal_start = highest_high_fractal
+            ideal_end = lowest_low_fractal
+        else:
+            # Low came first, then high = UP swing
+            ideal_direction = 'up'
+            ideal_start = lowest_low_fractal
+            ideal_end = highest_high_fractal
+
+        ideal_points = abs(ideal_end.price - ideal_start.price)
+
+        # Check minimum swing criteria
+        if ideal_points < self.min_swing_points:
+            logger.debug(f"⚠️ Ideal swing only {ideal_points:.1f} pts, below minimum {self.min_swing_points}")
+            return None
+
+        # If no current swing, or current swing doesn't match the ideal swing, create new one
+        if (not current_swing or 
+            current_swing.start_fractal.bar_index != ideal_start.bar_index or
+            current_swing.end_fractal.bar_index != ideal_end.bar_index):
+            
+            swing = Swing(
+                start_fractal=ideal_start,
+                end_fractal=ideal_end,
+                direction=ideal_direction,
+                points=ideal_points,
+                bars=abs(ideal_end.bar_index - ideal_start.bar_index),
+                is_dominant=True
+            )
+
+            logger.debug(f"🔥 NEW/EXTENDED {ideal_direction} swing: {ideal_points:.1f} pts connecting absolute extremes")
+            logger.debug(f"   Start: {ideal_start.price:.2f} at bar {ideal_start.bar_index}")
+            logger.debug(f"   End: {ideal_end.price:.2f} at bar {ideal_end.bar_index}")
+            
+            return swing
+        
         return None
+    
+    def is_dominant_swing_invalidated(self, df: pd.DataFrame, current_index: int) -> bool:
+        """
+        Check if current dominant swing has been invalidated by price action.
+        
+        ELLIOTT WAVE INVALIDATION RULES:
+        - DOWN dominant swing: invalidated if price breaks ABOVE the swing's HIGH (end fractal)
+        - UP dominant swing: invalidated if price breaks BELOW the swing's LOW (end fractal)
+        
+        This preserves market structure until the swing extreme is genuinely broken.
+        """
+        if not self.current_dominant_swing or current_index >= len(df):
+            return False
+            
+        current_bar = df.iloc[current_index]
+        current_high = current_bar['high']
+        current_low = current_bar['low']
+        
+        if self.current_dominant_swing.direction == 'down':
+            # DOWN swing invalidated if price breaks ABOVE its starting high
+            swing_high = self.current_dominant_swing.start_fractal.price
+            if current_high > swing_high:
+                logger.debug(f"🔄 DOWN dominant swing INVALIDATED: price {current_high:.2f} broke above swing start {swing_high:.2f}")
+                return True
+        elif self.current_dominant_swing.direction == 'up':
+            # UP swing invalidated if price breaks BELOW its starting low
+            swing_low = self.current_dominant_swing.start_fractal.price
+            if current_low < swing_low:
+                logger.debug(f"🔄 UP dominant swing INVALIDATED: price {current_low:.2f} broke below swing start {swing_low:.2f}")
+                return True
+                
+        return False
+    
+    def update_dominant_swing(self):
+        """
+        Update dominant swing status using ELLIOTT WAVE + TIME-BASED logic.
+
+        LOGIC:
+        1. Find swings that are relevant within current lookback window
+        2. Prioritize swings that start/end within the window (more recent)
+        3. Choose the most significant swing that represents current market bias
+        """
+        if not self.swings:
+            return
+
+        # Reset all swings to non-dominant initially
+        for swing in self.swings:
+            swing.is_dominant = False
+
+        # Filter swings within lookback period
+        if hasattr(self, 'current_bar') and self.current_bar is not None:
+            lookback_start = max(0, self.current_bar - self.lookback_candles)
+
+            # Categorize swings by relevance to current window
+            fully_within_swings = []  # Both start and end within window
+            partially_within_swings = []  # Only end within window
+
+            for swing in self.swings:
+                if swing.start_fractal.bar_index >= lookback_start and swing.end_fractal.bar_index >= lookback_start:
+                    fully_within_swings.append(swing)
+                elif swing.end_fractal.bar_index >= lookback_start:
+                    partially_within_swings.append(swing)
+        else:
+            fully_within_swings = self.swings
+            partially_within_swings = []
+
+        # 🚨 SIMPLIFIED DOMINANCE LOGIC: Always choose the largest swing by magnitude
+        # This ensures the most visually obvious swing becomes dominant
+        # Complex Elliott Wave logic was causing wrong swing selection
+
+        all_relevant_swings = fully_within_swings + partially_within_swings
+        if not all_relevant_swings:
+            return
+
+        # 🚨 CRITICAL DEBUG: Log all relevant swings before dominance selection
+        logger.debug(f"🔍 DOMINANCE SELECTION: Found {len(all_relevant_swings)} relevant swings")
+        for i, swing in enumerate(all_relevant_swings):
+            relevance = "fully within" if swing in fully_within_swings else "partially within"
+            logger.debug(f"   {i+1}. {swing.direction.upper()} swing: {swing.points:.1f} pts ({relevance})")
+            logger.debug(f"      From {swing.start_fractal.price:.2f} to {swing.end_fractal.price:.2f}")
+
+        # SIMPLIFIED: Just pick the largest swing by points (most obvious to user)
+        dominant_swing = max(all_relevant_swings, key=lambda s: s.points)
+        logger.debug(f"🎯 SIMPLIFIED SELECTION: Chose largest swing by magnitude ({dominant_swing.points:.1f} pts)")
+
+        # Skip the complex extreme-connecting logic for now to fix the immediate issue
+        # TODO: Re-implement Elliott Wave logic after basic dominance works correctly
+
+        # 🚨 CRITICAL DEBUG: Log the selected dominant swing
+        logger.debug(f"🎯 SELECTED DOMINANT: {dominant_swing.direction.upper()} swing ({dominant_swing.points:.1f} pts)")
+        logger.debug(f"   From {dominant_swing.start_fractal.price:.2f} to {dominant_swing.end_fractal.price:.2f}")
+
+        # Mark as dominant
+        dominant_swing.is_dominant = True
+        self.current_dominant_swing = dominant_swing
+        logger.debug(f"🔒 DOMINANT SWING SET: {dominant_swing.direction} from {dominant_swing.start_fractal.price:.2f} to {dominant_swing.end_fractal.price:.2f}")
+        logger.debug(f"   Swing relevance: {'fully within' if dominant_swing in fully_within_swings else 'partially within'} lookback window")
+
+        # 🚨 CRITICAL: Recalculate Fibonacci levels for the new dominant swing
+        self.fibonacci_zones = self.calculate_fibonacci_levels(dominant_swing)
+        logger.debug(f"📐 FIBONACCI RECALCULATED: {len(self.fibonacci_zones)} levels for new dominant swing")
+
+        # 🚨 CRITICAL DEBUG: Log all swings and their dominance status
+        logger.debug(f"📊 ALL SWINGS AFTER DOMINANCE UPDATE:")
+        for i, swing in enumerate(self.swings):
+            status = "DOMINANT" if swing.is_dominant else "context"
+            logger.debug(f"   {i+1}. {swing.direction.upper()} swing: {swing.points:.1f} pts - {status}")
+            logger.debug(f"      From {swing.start_fractal.price:.2f} to {swing.end_fractal.price:.2f}")
+
+        # Verify that only one swing is marked as dominant
+        dominant_count = sum(1 for swing in self.swings if swing.is_dominant)
+        if dominant_count != 1:
+            logger.warning(f"⚠️ DOMINANCE ERROR: {dominant_count} swings marked as dominant (should be 1)")
+
+        # 📊 CLEAN DISPLAY: Keep only dominant + 1 most recent opposite swing
+        all_relevant_swings = fully_within_swings + partially_within_swings
+        self.limit_to_two_swings(all_relevant_swings)
+
+    def recalculate_swings_for_lookback_window(self):
+        """
+        Recalculate swings from scratch when lookback window moves.
+        This ensures swings always connect the absolute extremes within the current lookback window.
+        
+        🚨 CRITICAL FIX: This method completely rebuilds swing structure to fix the extension bug.
+        """
+        if not self.fractals or not hasattr(self, 'current_bar') or self.current_bar is None:
+            return
+
+        lookback_start = max(0, self.current_bar - self.lookback_candles)
+        logger.debug(f"🔄 LOOKBACK RECALC: Window starts at bar {lookback_start}")
+
+        # Find all fractals within the current lookback window
+        fractals_in_window = [f for f in self.fractals if f.bar_index >= lookback_start]
+
+        if len(fractals_in_window) < 2:
+            logger.debug(f"⚠️ Not enough fractals in lookback window ({len(fractals_in_window)}), clearing swings")
+            self.swings.clear()
+            self.current_dominant_swing = None
+            return
+
+        # Find absolute extremes within the lookback window
+        highest_high_fractal = None
+        lowest_low_fractal = None
+        highest_price = float('-inf')
+        lowest_price = float('inf')
+
+        for fractal in fractals_in_window:
+            if fractal.fractal_type == 'high' and fractal.price > highest_price:
+                highest_price = fractal.price
+                highest_high_fractal = fractal
+            elif fractal.fractal_type == 'low' and fractal.price < lowest_price:
+                lowest_price = fractal.price
+                lowest_low_fractal = fractal
+
+        if not highest_high_fractal or not lowest_low_fractal:
+            logger.debug(f"⚠️ Missing extreme fractals in lookback window")
+            self.swings.clear()
+            self.current_dominant_swing = None
+            return
+
+        # 🚨 CRITICAL FIX: Clear ALL existing swings and rebuild from scratch
+        # This prevents accumulation of outdated swings
+        self.swings.clear()
+        self.current_dominant_swing = None
+        logger.debug(f"🧹 CLEARED all existing swings for fresh recalculation")
+
+        # Create THE swing connecting absolute extremes (Elliott Wave principle)
+        # Determine direction based on which extreme comes first chronologically
+        if highest_high_fractal.bar_index < lowest_low_fractal.bar_index:
+            # High comes first, then low = DOWN swing
+            start_fractal = highest_high_fractal
+            end_fractal = lowest_low_fractal
+            direction = 'down'
+        else:
+            # Low comes first, then high = UP swing
+            start_fractal = lowest_low_fractal
+            end_fractal = highest_high_fractal
+            direction = 'up'
+
+        points = abs(end_fractal.price - start_fractal.price)
+        bars = abs(end_fractal.bar_index - start_fractal.bar_index)
+
+        # Only create swing if it meets minimum criteria
+        if points >= self.min_swing_points:
+            # Create the ONE dominant swing connecting absolute extremes
+            dominant_swing = Swing(
+                start_fractal=start_fractal,
+                end_fractal=end_fractal,
+                direction=direction,
+                points=points,
+                bars=bars,
+                is_dominant=True  # Mark as dominant immediately
+            )
+
+            self.swings.append(dominant_swing)
+            self.current_dominant_swing = dominant_swing
+            
+            logger.debug(f"🔥 LOOKBACK RECALC: Created DOMINANT {direction} swing connecting absolute extremes")
+            logger.debug(f"   Start: {start_fractal.price:.2f} at bar {start_fractal.bar_index}")
+            logger.debug(f"   End: {end_fractal.price:.2f} at bar {end_fractal.bar_index}")
+            logger.debug(f"   Points: {points:.1f}")
+            
+            # Calculate new Fibonacci levels for the new dominant swing
+            self.fibonacci_zones = self.calculate_fibonacci_levels(dominant_swing)
+            logger.debug(f"📐 FIBONACCI RECALCULATED: {len(self.fibonacci_zones)} levels for new dominant swing")
+        else:
+            logger.debug(f"⚠️ Extreme swing only {points:.1f} pts, below minimum {self.min_swing_points}")
+            self.current_dominant_swing = None
+    
+    def get_dominant_swing(self) -> Optional[Swing]:
+        """Get the current dominant swing."""
+        for swing in self.swings:
+            if swing.is_dominant:
+                return swing
+        return None
+    
+    def get_market_bias(self) -> Dict[str, Any]:
+        """
+        Get current market bias based on dominant swing.
+        
+        Returns:
+            Dictionary with bias direction and trading recommendation
+        """
+        dominant_swing = self.get_dominant_swing()
+        
+        if not dominant_swing:
+            return {
+                'bias': 'NEUTRAL',
+                'direction': 'NEUTRAL',
+                'trading_direction': 'No clear bias',
+                'points': 0,
+                'recommendation': 'Wait for clear swing structure'
+            }
+        
+        if dominant_swing.direction == 'up':
+            return {
+                'bias': 'BULLISH',
+                'direction': 'UP',
+                'trading_direction': 'LOOK FOR BUY OPPORTUNITIES',
+                'points': dominant_swing.points,
+                'recommendation': 'Wait for retracements to Fibonacci levels for LONG entries'
+            }
+        else:
+            return {
+                'bias': 'BEARISH', 
+                'direction': 'DOWN',
+                'trading_direction': 'LOOK FOR SELL OPPORTUNITIES',
+                'points': dominant_swing.points,
+                'recommendation': 'Wait for retracements to Fibonacci levels for SHORT entries'
+            }
     
     def calculate_fibonacci_levels(self, swing: Swing) -> List[FibonacciLevel]:
         """
         Calculate Fibonacci retracement levels for a swing.
+
+        For UP swing: 0% = swing low, 100% = swing high, retracements go down from high
+        For DOWN swing: 0% = swing high, 100% = swing low, retracements go up from low
         """
         swing_high = max(swing.start_fractal.price, swing.end_fractal.price)
         swing_low = min(swing.start_fractal.price, swing.end_fractal.price)
         swing_range = swing_high - swing_low
-        
+
         fib_levels = []
         for level in self.fibonacci_levels:
             if swing.direction == 'up':
-                # For upswing, retracement levels below the high
+                # For UP swing: retracement levels go DOWN from the swing high
+                # 0% = high, 23.6% = high - 23.6% of range, etc.
                 price = swing_high - (swing_range * level)
             else:
-                # For downswing, retracement levels above the low  
+                # For DOWN swing: retracement levels go UP from the swing low
+                # 0% = low, 23.6% = low + 23.6% of range, etc.
                 price = swing_low + (swing_range * level)
-                
+
             fib_levels.append(FibonacciLevel(
                 level=level,
                 price=price,
                 hit=False
             ))
-            
+
         return fib_levels
     
     def generate_signal(self, df: pd.DataFrame, current_index: int, 
@@ -298,8 +637,65 @@ class FibonacciStrategy:
             'fibonacci_levels': [],
             'total_fractals': len(self.fractals),
             'total_swings': len(self.swings),
-            'total_signals': len(self.signals)
+            'total_signals': len(self.signals),
+            'market_bias': self.get_market_bias()
         }
+        
+        # 0. Check if current dominant swing has been invalidated by price action
+        if self.current_dominant_swing:
+            if self.is_dominant_swing_invalidated(df, current_index):
+                logger.debug(f"🔄 INVALIDATION TRIGGERED: Dominant {self.current_dominant_swing.direction} swing invalidated, recalculating...")
+                self.current_dominant_swing = None  # Clear invalidated swing
+                self.update_dominant_swing()  # Recalculate dominance
+                results['swing_invalidated'] = True
+                results['market_bias'] = self.get_market_bias()  # Update market bias after invalidation
+
+        # 0.5. Check if swing needs recalculation due to lookback window changes OR new extremes
+        # Only check this if we haven't already invalidated the swing above
+        lookback_start = max(0, current_index - self.lookback_candles)
+        should_recalculate = False
+        recalc_reason = ""
+        
+        if self.current_dominant_swing and not results.get('swing_invalidated'):
+            # Reason 1: Dominant swing's start fractal is now outside the lookback window
+            if self.current_dominant_swing.start_fractal.bar_index < lookback_start:
+                should_recalculate = True
+                recalc_reason = f"start fractal (bar {self.current_dominant_swing.start_fractal.bar_index}) outside lookback window (starts at bar {lookback_start})"
+            
+            # 🚨 CRITICAL FIX: Reason 2: New extremes within lookback window that create bigger swing
+            elif len(self.fractals) > 0:
+                # Find current extremes within lookback window
+                fractals_in_window = [f for f in self.fractals if f.bar_index >= lookback_start]
+                if len(fractals_in_window) >= 2:
+                    # Find absolute extremes
+                    highest_high = max([f for f in fractals_in_window if f.fractal_type == 'high'], key=lambda f: f.price, default=None)
+                    lowest_low = min([f for f in fractals_in_window if f.fractal_type == 'low'], key=lambda f: f.price, default=None)
+                    
+                    if highest_high and lowest_low:
+                        # Calculate what the swing should be
+                        potential_points = abs(highest_high.price - lowest_low.price)
+                        current_points = self.current_dominant_swing.points
+                        
+                        # Check if current swing doesn't connect to absolute extremes
+                        current_connects_to_high = (self.current_dominant_swing.start_fractal.bar_index == highest_high.bar_index or 
+                                                  self.current_dominant_swing.end_fractal.bar_index == highest_high.bar_index)
+                        current_connects_to_low = (self.current_dominant_swing.start_fractal.bar_index == lowest_low.bar_index or 
+                                                 self.current_dominant_swing.end_fractal.bar_index == lowest_low.bar_index)
+                        
+                        if not (current_connects_to_high and current_connects_to_low):
+                            should_recalculate = True
+                            recalc_reason = f"new extremes found - current swing doesn't connect absolute high ({highest_high.price:.2f}) to absolute low ({lowest_low.price:.2f})"
+                        elif potential_points > current_points + 10:  # Allow small tolerance
+                            should_recalculate = True
+                            recalc_reason = f"bigger swing possible ({potential_points:.1f} pts vs current {current_points:.1f} pts)"
+            
+            # Trigger recalculation if needed
+            if should_recalculate:
+                logger.debug(f"🔄 LOOKBACK RECALC TRIGGERED: {recalc_reason}")
+                self.current_dominant_swing = None  # Clear current swing
+                self.recalculate_swings_for_lookback_window()  # Recalculate from scratch
+                results['lookback_recalculation'] = True
+                results['market_bias'] = self.get_market_bias()  # Update market bias after recalculation
         
         # 1. Check for new fractal (need future bars, so delay by fractal_period)
         if current_index >= self.fractal_period * 2:
@@ -315,37 +711,56 @@ class FibonacciStrategy:
                     'bar_index': new_fractal.bar_index
                 }
                 
-                # 2. Check for new swing
-                new_swing = self.identify_swing(new_fractal)
-                if new_swing:
-                    self.swings.append(new_swing)
+                # 🚨 CRITICAL FIX: ALWAYS force recalculation when new fractal is detected
+                # This ensures swing immediately extends to new extremes
+                logger.debug(f"🔥 NEW FRACTAL DETECTED: {new_fractal.fractal_type} at {new_fractal.price:.2f}, forcing recalculation")
+                self.current_dominant_swing = None  # Clear current swing
+                self.recalculate_swings_for_lookback_window()  # Recalculate from scratch
+                results['swing_recalculated_for_new_fractal'] = True
+                results['market_bias'] = self.get_market_bias()  # Update market bias after recalculation
+                
+                # Add swing info to results if we have a new dominant swing
+                if self.current_dominant_swing:
                     results['new_swing'] = {
                         'start_fractal': {
-                            'timestamp': new_swing.start_fractal.timestamp.isoformat(),
-                            'price': new_swing.start_fractal.price,
-                            'fractal_type': new_swing.start_fractal.fractal_type,
-                            'bar_index': new_swing.start_fractal.bar_index
+                            'timestamp': self.current_dominant_swing.start_fractal.timestamp.isoformat(),
+                            'price': self.current_dominant_swing.start_fractal.price,
+                            'fractal_type': self.current_dominant_swing.start_fractal.fractal_type,
+                            'bar_index': self.current_dominant_swing.start_fractal.bar_index
                         },
                         'end_fractal': {
-                            'timestamp': new_swing.end_fractal.timestamp.isoformat(),
-                            'price': new_swing.end_fractal.price,
-                            'fractal_type': new_swing.end_fractal.fractal_type,
-                            'bar_index': new_swing.end_fractal.bar_index
+                            'timestamp': self.current_dominant_swing.end_fractal.timestamp.isoformat(),
+                            'price': self.current_dominant_swing.end_fractal.price,
+                            'fractal_type': self.current_dominant_swing.end_fractal.fractal_type,
+                            'bar_index': self.current_dominant_swing.end_fractal.bar_index
                         },
-                        'direction': new_swing.direction,
-                        'points': new_swing.points,
-                        'bars': new_swing.bars
+                        'direction': self.current_dominant_swing.direction,
+                        'points': self.current_dominant_swing.points,
+                        'bars': self.current_dominant_swing.bars,
+                        'is_dominant': self.current_dominant_swing.is_dominant
                     }
                     
-                    # 3. Calculate new Fibonacci levels
-                    self.fibonacci_zones = self.calculate_fibonacci_levels(new_swing)
+                    # Calculate Fibonacci levels for the new dominant swing
+                    self.fibonacci_zones = self.calculate_fibonacci_levels(self.current_dominant_swing)
+                    logger.debug(f"🔍 FIBONACCI SOURCE: Using {self.current_dominant_swing.direction.upper()} swing for fibonacci levels")
+                    logger.debug(f"   Swing: {self.current_dominant_swing.start_fractal.price:.2f} -> {self.current_dominant_swing.end_fractal.price:.2f}")
+                    logger.debug(f"   Points: {self.current_dominant_swing.points:.1f}")
+
                     results['fibonacci_levels'] = [
                         {
                             'level': fib.level,
                             'price': fib.price,
-                            'hit': fib.hit
+                            'hit': fib.hit,
+                            'swing_direction': self.current_dominant_swing.direction,
+                            'swing_start_price': self.current_dominant_swing.start_fractal.price,
+                            'swing_end_price': self.current_dominant_swing.end_fractal.price,
+                            'swing_start_time': self.current_dominant_swing.start_fractal.timestamp.isoformat(),
+                            'swing_end_time': self.current_dominant_swing.end_fractal.timestamp.isoformat()
                         } for fib in self.fibonacci_zones
                     ]
+                else:
+                    logger.debug("⚠️ FIBONACCI SOURCE: No dominant swing available after recalculation")
+                    results['fibonacci_levels'] = []
         
         # 4. Check for Fibonacci level hits and generate signals
         new_signals = self.check_fibonacci_hits(df, current_index)
@@ -380,9 +795,35 @@ class FibonacciStrategy:
         self.signals.clear()
         self.current_bar = 0
         self.dominant_trend = None
+        self.current_dominant_swing = None
     
     def get_current_state(self) -> Dict:
         """Get current strategy state for dashboard display."""
+        # Calculate Fibonacci levels for dominant swing if available
+        fibonacci_levels = []
+        if self.current_dominant_swing:
+            fib_levels = self.calculate_fibonacci_levels(self.current_dominant_swing)
+
+            # 🚨 CRITICAL DEBUG: Log fibonacci calculation in get_current_state
+            logger.debug(f"🔍 GET_CURRENT_STATE: Fibonacci levels calculated from {self.current_dominant_swing.direction.upper()} swing")
+            logger.debug(f"   Swing: {self.current_dominant_swing.start_fractal.price:.2f} -> {self.current_dominant_swing.end_fractal.price:.2f}")
+            logger.debug(f"   Calculated {len(fib_levels)} fibonacci levels")
+
+            fibonacci_levels = [
+                {
+                    'level': f.level,
+                    'price': f.price,
+                    'hit': f.hit,
+                    'swing_direction': self.current_dominant_swing.direction,
+                    'swing_start_price': self.current_dominant_swing.start_fractal.price,
+                    'swing_end_price': self.current_dominant_swing.end_fractal.price,
+                    'swing_start_time': self.current_dominant_swing.start_fractal.timestamp.isoformat(),
+                    'swing_end_time': self.current_dominant_swing.end_fractal.timestamp.isoformat()
+                } for f in fib_levels
+            ]
+        else:
+            logger.debug("⚠️ GET_CURRENT_STATE: No dominant swing available for fibonacci calculation")
+
         return {
             'fractals': [
                 {
@@ -400,16 +841,20 @@ class FibonacciStrategy:
                     'end_price': s.end_fractal.price,
                     'direction': s.direction,
                     'points': s.points,
-                    'bars': s.bars
+                    'bars': s.bars,
+                    'is_dominant': s.is_dominant
                 } for s in self.swings
             ],
-            'fibonacci_levels': [
-                {
-                    'level': f.level,
-                    'price': f.price,
-                    'hit': f.hit
-                } for f in self.fibonacci_zones
-            ],
+            'fibonacci_levels': fibonacci_levels,
+            'dominant_swing': {
+                'start_timestamp': self.current_dominant_swing.start_fractal.timestamp.isoformat(),
+                'end_timestamp': self.current_dominant_swing.end_fractal.timestamp.isoformat(),
+                'start_price': self.current_dominant_swing.start_fractal.price,
+                'end_price': self.current_dominant_swing.end_fractal.price,
+                'direction': self.current_dominant_swing.direction,
+                'points': self.current_dominant_swing.points,
+                'bars': self.current_dominant_swing.bars
+            } if self.current_dominant_swing else None,
             'signals': [
                 {
                     'timestamp': s.timestamp.isoformat(),

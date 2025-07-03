@@ -29,6 +29,8 @@ class DataRequest(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     limit: Optional[int] = None  # No default limit - load all data in range
+    fractal_periods: Optional[int] = 5  # Configurable fractal detection periods
+    lookback_candles: Optional[int] = 140  # Configurable lookback period for swing analysis
 
 class BacktestRequest(BaseModel):
     symbol: str
@@ -582,6 +584,30 @@ async def get_research_dashboard():
                 </div>
                 
                 <div class="sidebar-section">
+                    <h3>🎯 Market Bias</h3>
+                    <div id="marketBiasPanel">
+                        <div class="metric">
+                            <span class="metric-label">Sentiment:</span>
+                            <span class="metric-value" id="marketSentiment">NEUTRAL</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Direction:</span>
+                            <span class="metric-value" id="marketDirection">-</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Points:</span>
+                            <span class="metric-value" id="dominantPoints">0</span>
+                        </div>
+                        <div class="metric" style="margin-top: 8px;">
+                            <span class="metric-label" style="font-weight: bold;">Trading Direction:</span>
+                        </div>
+                        <div class="metric" style="margin-top: 4px;">
+                            <span class="metric-value" id="tradingDirection" style="color: #FFD700; font-weight: bold; font-size: 10px;">Wait for setup</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="sidebar-section">
                     <h3>🐛 Debug Panel</h3>
                     <div id="debugPanel">
                         <div class="metric">
@@ -633,6 +659,24 @@ async def get_research_dashboard():
                             <input type="checkbox" id="showFractals" checked onchange="refreshChartElements()">
                         </div>
                         <div class="metric">
+                            <span class="metric-label">Show Fibonacci:</span>
+                            <input type="checkbox" id="showFibonacci" checked onchange="refreshChartElements()">
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Fractal Periods:</span>
+                            <input type="number" id="fractalPeriods" min="1" max="50" value="5" onchange="refreshChartElements()" style="width: 60px;" title="Number of bars before AND after the high/low point for fractal validation. Period N = N bars delay after actual turning point.">
+                        </div>
+                        <div class="metric" style="font-size: 0.8em; color: #666; margin-top: 5px;">
+                            <span>ℹ️ Fractal detection requires N bars after the high/low point for confirmation</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Lookback Candles:</span>
+                            <input type="number" id="lookbackCandles" min="50" max="500" value="140" onchange="refreshChartElements()" style="width: 70px;" title="Number of candles to look back for swing analysis. Strategy only considers swings within this period.">
+                        </div>
+                        <div class="metric" style="font-size: 0.8em; color: #666; margin-top: 5px;">
+                            <span>📊 Only swings within lookback period are considered for dominance</span>
+                        </div>
+                        <div class="metric">
                             <span class="metric-label">Show Swings:</span>
                             <input type="checkbox" id="showSwings" onchange="refreshChartElements()">
                         </div>
@@ -643,6 +687,10 @@ async def get_research_dashboard():
                         <div class="metric">
                             <span class="metric-label">Show Signals:</span>
                             <input type="checkbox" id="showSignals" onchange="refreshChartElements()">
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Show Lookback Line:</span>
+                            <input type="checkbox" id="showLookbackLine" onchange="refreshChartElements()">
                         </div>
                     </div>
                 </div>
@@ -773,8 +821,11 @@ async def get_research_dashboard():
                 }
             }
             
-            // Global array to store accumulated fractals from real-time detection
+            // Global arrays to store accumulated data from real-time detection
             let accumulatedFractals = [];
+            let accumulatedSwings = [];
+            let accumulatedFibonacci = [];
+            let accumulatedDominantSwing = null;
             
             // ✅ PROPER TRADINGVIEW MARKER MANAGEMENT
             class FractalMarkerManager {
@@ -835,13 +886,603 @@ async def get_research_dashboard():
             
             // Global marker manager instance
             let fractalManager = null;
+            let swingLineManager = null;
+            let fibonacciManager = null;
             
+            // ✅ PROFESSIONAL TRADINGVIEW SWING LINE IMPLEMENTATION
+            // Following TradingView Lightweight Charts best practices for custom line drawing
+            
+            // Swing Line Primitive - Core line drawing component
+            class SwingLinePrimitive {
+                constructor(point1, point2, options = {}) {
+                    this._point1 = point1; // { time: Time, value: number }
+                    this._point2 = point2; // { time: Time, value: number }
+                    this._options = {
+                        color: options.color || '#26A69A',
+                        lineWidth: options.lineWidth || 2,
+                        lineStyle: options.lineStyle || 0, // solid
+                        opacity: options.opacity || 0.8,
+                        ...options
+                    };
+                    this._paneViews = [new SwingLinePaneView(this)];
+                }
+                
+                // Required TradingView interface methods
+                attached(params) {
+                    this._attachedParams = params;
+                }
+                
+                detached() {
+                    // Cleanup when primitive is detached
+                }
+                
+                paneViews() {
+                    return this._paneViews;
+                }
+                
+                updateAllViews() {
+                    this._paneViews.forEach(view => view.update());
+                }
+                
+                // Update line points
+                updatePoints(point1, point2) {
+                    this._point1 = point1;
+                    this._point2 = point2;
+                    this.updateAllViews();
+                }
+                
+                // Getters for rendering
+                point1() { return this._point1; }
+                point2() { return this._point2; }
+                options() { return this._options; }
+            }
+            
+            // Swing Line Pane View - View management
+            class SwingLinePaneView {
+                constructor(source) {
+                    this._source = source;
+                    this._renderer = new SwingLineRenderer();
+                }
+                
+                update() {
+                    this._renderer.update(this._source);
+                }
+                
+                renderer() {
+                    return this._renderer;
+                }
+            }
+            
+            // Swing Line Renderer - Actual drawing implementation
+            class SwingLineRenderer {
+                constructor() {
+                    this._point1 = null;
+                    this._point2 = null;
+                    this._options = null;
+                }
+                
+                update(source) {
+                    this._point1 = source.point1();
+                    this._point2 = source.point2();
+                    this._options = source.options();
+                }
+                
+                draw(target) {
+                    if (!this._point1 || !this._point2 || !target.canvasRenderingContext2D) return;
+                    
+                    const ctx = target.canvasRenderingContext2D;
+                    const pixelRatio = target.pixelRatio;
+                    
+                    // Convert time/price coordinates to pixel coordinates
+                    const timeToCoordinate = target.context.timeScale.timeToCoordinate.bind(target.context.timeScale);
+                    const priceToCoordinate = target.context.priceScale.priceToCoordinate.bind(target.context.priceScale);
+                    
+                    const x1 = timeToCoordinate(this._point1.time);
+                    const y1 = priceToCoordinate(this._point1.value);
+                    const x2 = timeToCoordinate(this._point2.time);
+                    const y2 = priceToCoordinate(this._point2.value);
+                    
+                    // Skip if coordinates are invalid
+                    if (x1 === null || y1 === null || x2 === null || y2 === null) return;
+                    
+                    // Viewport culling for performance
+                    const margin = 50; // pixels
+                    const viewport = {
+                        left: -margin,
+                        right: target.mediaSize.width + margin,
+                        top: -margin,
+                        bottom: target.mediaSize.height + margin
+                    };
+                    
+                    if (!this._lineIntersectsViewport(x1, y1, x2, y2, viewport)) {
+                        return; // Skip off-screen lines
+                    }
+                    
+                    // Draw the swing line
+                    ctx.save();
+                    ctx.globalAlpha = this._options.opacity;
+                    ctx.strokeStyle = this._options.color;
+                    ctx.lineWidth = this._options.lineWidth * pixelRatio;
+                    ctx.setLineDash(this._getLineDash());
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(x1 * pixelRatio, y1 * pixelRatio);
+                    ctx.lineTo(x2 * pixelRatio, y2 * pixelRatio);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+                
+                _lineIntersectsViewport(x1, y1, x2, y2, viewport) {
+                    // Simple bounding box check for line visibility
+                    const minX = Math.min(x1, x2);
+                    const maxX = Math.max(x1, x2);
+                    const minY = Math.min(y1, y2);
+                    const maxY = Math.max(y1, y2);
+                    
+                    return maxX >= viewport.left && minX <= viewport.right &&
+                           maxY >= viewport.top && minY <= viewport.bottom;
+                }
+                
+                _getLineDash() {
+                    // Convert line style to dash pattern
+                    switch (this._options.lineStyle) {
+                        case 1: return [5, 5]; // dashed
+                        case 2: return [2, 2]; // dotted
+                        default: return []; // solid
+                    }
+                }
+            }
+            
+            // Swing Line Manager - High-level management with performance optimization
+            class SwingLineManager {
+                constructor(series) {
+                    this._series = series;
+                    this._lines = new Map();
+                    this._simpleLines = new Map(); // Simple line series for debugging
+                    this._nextId = 0;
+                    this._lastSwingSignature = null; // Track swing data changes to prevent unnecessary redraws
+                    
+                    // Color scheme following best practices
+                    this.COLORS = {
+                        uptrend: '#26A69A',        // Teal for bullish swings
+                        downtrend: '#EF5350',     // Red for bearish swings
+                        major: '#FF6B35',         // Orange for major swings
+                        minor: '#95A5A6',         // Gray for minor swings
+                        dominant_up: '#00E676',   // Bright green for dominant bullish
+                        dominant_down: '#FF1744', // Bright red for dominant bearish
+                        normal_up: '#4CAF50',     // Normal green for regular bullish
+                        normal_down: '#F44336'    // Normal red for regular bearish
+                    };
+                }
+                
+                addSwingLine(point1, point2, direction = 'neutral', strength = 'normal') {
+                    const id = this._nextId++;
+                    
+                    // 🚨 CRITICAL: Final coordinate validation before drawing
+                    console.log(`🎯 ADDING SWING LINE ${id}:`, { point1, point2, direction, strength });
+                    
+                    // Validate coordinates one more time
+                    if (!point1 || !point2) {
+                        console.error(`❌ ADDSWINGLINE: Missing points`, { point1, point2 });
+                        return null;
+                    }
+                    
+                    if (typeof point1.time !== 'number' || typeof point1.value !== 'number' ||
+                        typeof point2.time !== 'number' || typeof point2.value !== 'number') {
+                        console.error(`❌ ADDSWINGLINE: Invalid coordinate types`, { point1, point2 });
+                        return null;
+                    }
+                    
+                    if (isNaN(point1.time) || isNaN(point1.value) || isNaN(point2.time) || isNaN(point2.value)) {
+                        console.error(`❌ ADDSWINGLINE: NaN coordinates`, { point1, point2 });
+                        return null;
+                    }
+                    
+                    // Check for identical points (would create invisible line)
+                    if (point1.time === point2.time && point1.value === point2.value) {
+                        console.warn(`⚠️ ADDSWINGLINE: Identical points (invisible line)`, { point1, point2 });
+                        return null;
+                    }
+                    
+                    // Color coding based on direction and strength
+                    const color = this._getSwingColor(direction, strength);
+                    let lineWidth = 2; // Default line width
+                    let lineStyle = 0; // Default solid line
+                    
+                    // Set line styling based on strength
+                    if (strength === 'dominant') {
+                        lineWidth = 4; // Thick for dominant swing
+                        lineStyle = 0; // Solid line for dominant
+                    } else if (strength === 'major') {
+                        lineWidth = 3; // Thick for major swings
+                        lineStyle = 0; // Solid line for major
+                    } else {
+                        lineWidth = 2; // Normal width for non-dominant
+                        lineStyle = 1; // Dashed line for non-dominant
+                    }
+                    
+                    try {
+                        // Enhanced swing line with proper styling
+                        const swingData = [
+                            { time: point1.time, value: point1.value },
+                            { time: point2.time, value: point2.value }
+                        ];
+                        
+                        // Log the exact data being sent to TradingView
+                        console.log(`🎯 TRADINGVIEW DATA for swing ${id}:`, {
+                            swingData,
+                            config: {
+                                color,
+                                lineWidth,
+                                lineStyle,
+                                direction,
+                                strength
+                            }
+                        });
+                        
+                        // Validate TradingView data format
+                        swingData.forEach((point, idx) => {
+                            if (typeof point.time !== 'number' || typeof point.value !== 'number') {
+                                throw new Error(`Invalid data point ${idx}: time=${point.time} (${typeof point.time}), value=${point.value} (${typeof point.value})`);
+                            }
+                            if (isNaN(point.time) || isNaN(point.value)) {
+                                throw new Error(`NaN in data point ${idx}: time=${point.time}, value=${point.value}`);
+                            }
+                        });
+                        
+                        const lineSeries = chart.addLineSeries({
+                            color: color,
+                            lineWidth: lineWidth,
+                            lineStyle: lineStyle, // 0 = solid, 1 = dashed, 2 = dotted
+                            priceLineVisible: false,
+                            lastValueVisible: false,
+                            title: strength === 'dominant' ? `Dominant ${direction.toUpperCase()} swing` : `${direction.toUpperCase()} swing`
+                        });
+                        
+                        lineSeries.setData(swingData);
+                        this._simpleLines.set(id, lineSeries);
+                        
+                        console.log(`✅ SUCCESS: Added ${direction} swing line ${id} from time ${point1.time} (${point1.value}) to time ${point2.time} (${point2.value})`);
+                        return id;
+                    } catch (error) {
+                        console.error(`❌ CRITICAL ERROR adding swing line ${id}:`, error, { point1, point2, direction, strength });
+                        return null;
+                    }
+                }
+                
+                updateSwingLine(id, point1, point2) {
+                    const line = this._lines.get(id);
+                    if (line) {
+                        line.updatePoints(point1, point2);
+                    }
+                }
+                
+                removeSwingLine(id) {
+                    const line = this._lines.get(id);
+                    if (line) {
+                        this._series.detachPrimitive(line);
+                        this._lines.delete(id);
+                    }
+                }
+                
+                removeAllSwingLines() {
+                    console.log(`🧹 Removing ${this._simpleLines.size} swing lines`);
+                    this._simpleLines.forEach(lineSeries => {
+                        chart.removeSeries(lineSeries);
+                    });
+                    this._simpleLines.clear();
+                    this._lines.clear();
+                }
+                
+                loadAllSwings(swings) {
+                    console.log(`🔍 DEBUG: Loading ${swings.length} swings for filtering`, swings);
+                    
+                    // 🎯 CRITICAL: Only show the LATEST 2 swings (1 up + 1 down) within lookback period
+                    if (!swings || swings.length === 0) {
+                        console.log('No swings to display');
+                        this.removeAllSwingLines(); // Only clear if no swings
+                        return;
+                    }
+                    
+                    // 🚨 PERFORMANCE FIX: Check if swing data has actually changed before clearing/redrawing
+                    const currentSwingSignature = swings.map(s => `${s.direction}-${s.start_fractal.timestamp}-${s.end_fractal.timestamp}-${s.is_dominant}`).join('|');
+                    if (this._lastSwingSignature === currentSwingSignature) {
+                        console.log('📊 Swing data unchanged, skipping redraw to prevent flashing');
+                        return;
+                    }
+                    this._lastSwingSignature = currentSwingSignature;
+                    
+                    // Only clear and redraw if data has actually changed
+                    this.removeAllSwingLines();
+                    
+                    // Filter swings within lookback period if current position is available
+                    let filteredSwings = swings;
+                    if (typeof currentPosition !== 'undefined' && currentPosition !== null) {
+                        const lookbackCandles = parseInt(document.getElementById('lookbackCandles').value) || 140;
+                        const lookbackStart = Math.max(0, currentPosition - lookbackCandles);
+                        
+                        filteredSwings = swings.filter(swing => {
+                            const swingPosition = swing.end_fractal.bar_index || swing.position || 0;
+                            return swingPosition >= lookbackStart;
+                        });
+                        
+                        console.log(`📊 Step 1: Filtered from ${swings.length} to ${filteredSwings.length} swings within lookback period (position ${currentPosition}, lookback ${lookbackCandles})`);
+                    } else {
+                        console.log('📊 Step 1: No current position, using all swings for filtering');
+                    }
+                    
+                    // 🚨 CRITICAL FIX: Respect backend's dominance calculation completely
+                    // The backend uses Elliott Wave principles to determine dominance correctly
+                    // Frontend should ALWAYS show the dominant swing + one opposing swing for context
+
+                    // Find the swing marked as dominant by the backend
+                    const dominantSwing = filteredSwings.find(swing => swing.is_dominant);
+
+                    if (!dominantSwing) {
+                        console.warn('⚠️ No dominant swing found in filtered swings - showing all');
+                        // Fallback: show all filtered swings if no dominance is set
+                        const displaySwings = filteredSwings;
+                        displaySwings.forEach((swing, index) => {
+                            // Use the same validation and drawing logic as the main path
+                            this._drawValidatedSwingInternal(swing, index);
+                        });
+                        return;
+                    }
+
+                    // Always include the dominant swing
+                    const displaySwings = [dominantSwing];
+
+                    // Find the most recent swing in the opposite direction for context
+                    const oppositeDirection = dominantSwing.direction === 'up' ? 'down' : 'up';
+                    const oppositeSwings = filteredSwings.filter(swing =>
+                        swing.direction === oppositeDirection && !swing.is_dominant
+                    );
+
+                    if (oppositeSwings.length > 0) {
+                        // Sort by end time and take the most recent
+                        oppositeSwings.sort((a, b) => {
+                            const timeA = new Date(a.end_fractal.timestamp).getTime();
+                            const timeB = new Date(b.end_fractal.timestamp).getTime();
+                            return timeB - timeA; // Most recent first
+                        });
+                        displaySwings.push(oppositeSwings[0]);
+                    }
+                    
+                    console.log(`🎯 DISPLAY STRATEGY: Showing ${displaySwings.length} swings (dominant + context)`);
+                    displaySwings.forEach((swing, i) => {
+                        const isDominant = swing.is_dominant || false;
+                        const magnitude = Math.abs(swing.points || Math.abs(swing.end_fractal.price - swing.start_fractal.price));
+                        console.log(`   ${i + 1}. ${swing.direction.toUpperCase()} swing: ${magnitude.toFixed(5)} pts (${(magnitude*10000).toFixed(1)} pips) - ${isDominant ? 'DOMINANT' : 'context'}`);
+                    });
+
+                    // Update market bias based on backend's dominant swing
+                    if (dominantSwing) {
+                        const magnitude = Math.abs(dominantSwing.points || Math.abs(dominantSwing.end_fractal.price - dominantSwing.start_fractal.price));
+                        updateMarketBiasFromDominantSwing(dominantSwing, magnitude);
+                        console.log(`🔒 BACKEND DOMINANCE: ${dominantSwing.direction.toUpperCase()} swing (${magnitude.toFixed(5)} pts / ${(magnitude*10000).toFixed(1)} pips) marked as dominant`);
+                    }
+                    
+                    // Add only the latest swing lines with proper styling
+                    displaySwings.forEach((swing, index) => {
+                        this._drawValidatedSwingInternal(swing, index);
+                    });
+                    
+                    console.log(`📊 Clean display: ${displaySwings.length} swing lines loaded (using backend invalidation-based dominance)`);
+                }
+
+                _drawValidatedSwingInternal(swing, index) {
+                    // 🚨 CRITICAL: Validate swing data before drawing
+                    console.log(`🔍 VALIDATING SWING ${index + 1}:`, swing);
+
+                    // Validate fractal data exists
+                    if (!swing.start_fractal || !swing.end_fractal) {
+                        console.error(`❌ INVALID SWING: Missing fractal data`, swing);
+                        return;
+                    }
+
+                    // Validate timestamps
+                    if (!swing.start_fractal.timestamp || !swing.end_fractal.timestamp) {
+                        console.error(`❌ INVALID SWING: Missing timestamps`, swing);
+                        return;
+                    }
+
+                    // Validate prices
+                    if (typeof swing.start_fractal.price !== 'number' || typeof swing.end_fractal.price !== 'number') {
+                        console.error(`❌ INVALID SWING: Invalid prices`, swing);
+                        return;
+                    }
+
+                    if (isNaN(swing.start_fractal.price) || isNaN(swing.end_fractal.price)) {
+                        console.error(`❌ INVALID SWING: NaN prices`, swing);
+                        return;
+                    }
+
+                    // Calculate coordinates
+                    const startTime = new Date(swing.start_fractal.timestamp).getTime();
+                    const endTime = new Date(swing.end_fractal.timestamp).getTime();
+
+                    // Validate timestamp conversion
+                    if (isNaN(startTime) || isNaN(endTime)) {
+                        console.error(`❌ INVALID SWING: Invalid timestamp conversion`, {
+                            start: swing.start_fractal.timestamp,
+                            end: swing.end_fractal.timestamp,
+                            startTime,
+                            endTime
+                        });
+                        return;
+                    }
+
+                    const point1 = {
+                        time: Math.floor(startTime / 1000),
+                        value: swing.start_fractal.price
+                    };
+                    const point2 = {
+                        time: Math.floor(endTime / 1000),
+                        value: swing.end_fractal.price
+                    };
+
+                    // Validate final coordinates
+                    if (isNaN(point1.time) || isNaN(point1.value) || isNaN(point2.time) || isNaN(point2.value)) {
+                        console.error(`❌ INVALID COORDINATES:`, { point1, point2 });
+                        return;
+                    }
+
+                    // Calculate time and price differences for validation
+                    const timeDiff = Math.abs(point2.time - point1.time);
+                    const priceDiff = Math.abs(point2.value - point1.value);
+
+                    console.log(`✅ VALID SWING ${index + 1}: ${swing.direction}`, {
+                        start: { time: point1.time, price: point1.value, timestamp: swing.start_fractal.timestamp },
+                        end: { time: point2.time, price: point2.value, timestamp: swing.end_fractal.timestamp },
+                        timeDiff: `${timeDiff} seconds`,
+                        priceDiff: `${priceDiff.toFixed(2)} points`,
+                        dominant: swing.is_dominant || false
+                    });
+
+                    // Warn about suspicious swing characteristics
+                    if (timeDiff < 60) { // Less than 1 minute
+                        console.warn(`⚠️ SUSPICIOUS: Very short time span (${timeDiff}s) for swing`, { point1, point2 });
+                    }
+
+                    if (priceDiff > 1000) { // More than 1000 points
+                        console.warn(`⚠️ SUSPICIOUS: Very large price movement (${priceDiff.toFixed(2)} pts) for swing`, { point1, point2 });
+                    }
+
+                    // Draw the swing if validation passes
+                    const strength = swing.is_dominant ? 'dominant' : 'normal';
+                    this.addSwingLine(point1, point2, swing.direction, strength);
+                }
+
+                _getSwingColor(direction, strength) {
+                    // Handle dominant swings with special colors
+                    if (strength === 'dominant') {
+                        return direction === 'up' ? this.COLORS.dominant_up : this.COLORS.dominant_down;
+                    }
+                    
+                    // Handle major swings
+                    if (strength === 'major') {
+                        return this.COLORS.major;
+                    }
+                    
+                    // Handle normal swings with improved colors
+                    if (direction === 'up') {
+                        return this.COLORS.normal_up;
+                    } else if (direction === 'down') {
+                        return this.COLORS.normal_down;
+                    }
+                    
+                    // Fallback to original colors
+                    return direction === 'up' ? this.COLORS.uptrend : this.COLORS.downtrend;
+                }
+                
+                _determineStrength(swing) {
+                    // Determine swing strength based on price movement and duration
+                    const priceMove = Math.abs(swing.points || 0);
+                    const duration = swing.bars || 0;
+                    
+                    // Major swings: large price movement or long duration
+                    if (priceMove > 100 || duration > 50) {
+                        return 'major';
+                    }
+                    return 'normal';
+                }
+            }
+
+            // ✅ Fibonacci Level Manager - Professional Fibonacci retracement display
+            class FibonacciLevelManager {
+                constructor(candlestickSeries) {
+                    this.candlestickSeries = candlestickSeries;
+                    this.fibonacciLines = [];
+                    this.fibonacciColors = {
+                        0.236: '#ff9800',  // Orange
+                        0.382: '#2196f3',  // Blue
+                        0.500: '#9c27b0',  // Purple
+                        0.618: '#4caf50',  // Green
+                        0.786: '#f44336'   // Red
+                    };
+                }
+
+                updateFibonacciLevels(fibonacciLevels, dominantSwing) {
+                    // Clear existing Fibonacci lines
+                    this.clearFibonacci();
+
+                    if (!fibonacciLevels || fibonacciLevels.length === 0 || !dominantSwing) return;
+
+                    // Get chart time range for horizontal lines
+                    const swingStartTime = new Date(dominantSwing.start_timestamp).getTime() / 1000;
+                    const swingEndTime = new Date(dominantSwing.end_timestamp).getTime() / 1000;
+
+                    // Extend lines beyond the swing for better visibility
+                    const timeRange = swingEndTime - swingStartTime;
+                    const extendedStartTime = swingStartTime - (timeRange * 0.1);
+                    const extendedEndTime = swingEndTime + (timeRange * 0.5);
+
+                    // Add Fibonacci level lines
+                    fibonacciLevels.forEach(fibLevel => {
+                        this.addFibonacciLine(fibLevel, extendedStartTime, extendedEndTime);
+                    });
+                }
+
+                addFibonacciLine(fibLevel, startTime, endTime) {
+                    try {
+                        const levelPercentage = (fibLevel.level * 100).toFixed(1);
+                        const color = this.fibonacciColors[fibLevel.level] || '#ffffff';
+
+                        const lineStyle = {
+                            color: color,
+                            width: 0.5, // Thinner lines to reduce clutter
+                            style: 2, // Dotted line
+                            priceLineVisible: false,
+                            lastValueVisible: false
+                        };
+
+                        // Create horizontal line data
+                        const lineData = [
+                            { time: startTime, value: fibLevel.price },
+                            { time: endTime, value: fibLevel.price }
+                        ];
+
+                        // Create line series for this Fibonacci level
+                        const lineSeries = chart.addLineSeries(lineStyle);
+                        lineSeries.setData(lineData);
+
+                        // Add price line with label
+                        lineSeries.createPriceLine({
+                            price: fibLevel.price,
+                            color: color,
+                            lineWidth: 0.5, // Thinner price line
+                            lineStyle: 2, // Dotted
+                            axisLabelVisible: true,
+                            title: `${levelPercentage}%`
+                        });
+
+                        this.fibonacciLines.push(lineSeries);
+
+                    } catch (error) {
+                        console.error('Error adding Fibonacci line:', error);
+                    }
+                }
+
+                clearFibonacci() {
+                    this.fibonacciLines.forEach(line => {
+                        try {
+                            chart.removeSeries(line);
+                        } catch (error) {
+                            console.error('Error removing Fibonacci line:', error);
+                        }
+                    });
+                    this.fibonacciLines = [];
+                }
+            }
+
             // Simple fractal detection - removed complex logic that caused infinite loops
 
             // Helper function to load data into backtesting engine
             async function loadBacktestingEngine(symbol, timeframe, startDate, endDate) {
                 try {
-                    console.log('🔄 Loading backtesting engine with data...', {symbol, timeframe, startDate, endDate});
+                    const fractalPeriods = parseInt(document.getElementById('fractalPeriods').value) || 5;
+                    const lookbackCandles = parseInt(document.getElementById('lookbackCandles').value) || 140;
+                    console.log('🔄 Loading backtesting engine with data...', {symbol, timeframe, startDate, endDate, fractalPeriods, lookbackCandles});
                     
                     const response = await fetch('/api/backtest/load', {
                         method: 'POST',
@@ -851,7 +1492,9 @@ async def get_research_dashboard():
                             timeframe: timeframe,
                             start_date: startDate,
                             end_date: endDate,
-                            limit: null
+                            limit: null,
+                            fractal_periods: fractalPeriods,
+                            lookback_candles: lookbackCandles
                         })
                     });
                     
@@ -902,6 +1545,37 @@ async def get_research_dashboard():
                     }
                 }
                 
+                // 🚨 CRITICAL FIX: Process new swings from strategy results
+                if (data.strategy_results && data.strategy_results.new_swing) {
+                    const newSwing = data.strategy_results.new_swing;
+                    console.log(`🔥 NEW SWING DETECTED from backend:`, newSwing);
+                    
+                    // Add the new swing to accumulated swings (replacing any existing swing)
+                    accumulatedSwings = []; // Clear existing swings for clean dominance
+                    accumulatedSwings.push(newSwing);
+                    accumulatedDominantSwing = newSwing.is_dominant ? newSwing : null;
+                    
+                    console.log(`📈 Swing added: ${newSwing.direction} from ${newSwing.start_fractal.price} to ${newSwing.end_fractal.price}, dominant: ${newSwing.is_dominant}`);
+                    
+                    // Update swing display immediately if swings are enabled
+                    if (document.getElementById('showSwings').checked) {
+                        swingLineManager.loadAllSwings(accumulatedSwings);
+                        console.log(`🎯 Swing line updated on chart`);
+                    }
+                }
+                
+                // 🚨 CRITICAL FIX: Process swing recalculations (but only when actually needed)
+                if (data.strategy_results && (data.strategy_results.swing_recalculated_for_new_fractal || data.strategy_results.lookback_recalculation)) {
+                    console.log(`🔄 SWING RECALCULATION detected - reloading current strategy state`);
+                    
+                    // Only reload if we don't already have a new swing in this update
+                    if (!data.strategy_results.new_swing) {
+                        reloadCurrentSwingState();
+                    } else {
+                        console.log(`📊 New swing already processed in this update, skipping additional reload`);
+                    }
+                }
+                
                 // Update data inspector with current bar
                 if (data.current_bar) {
                     const barData = {
@@ -924,6 +1598,11 @@ async def get_research_dashboard():
                     document.getElementById('swingCount').textContent = results.total_swings || 0;
                     document.getElementById('signalCount').textContent = results.total_signals || 0;
                     
+                    // Update market bias display
+                    if (results.market_bias) {
+                        updateMarketBiasDisplay(results.market_bias);
+                    }
+                    
                     // Show fractal detection info at the beginning
                     if (currentPosition < 10 && results.total_fractals === 0) {
                         updateStatus(`Bar ${currentPosition + 1}/${totalBars} - Need at least 10 bars for first fractal detection (5 before + 5 after)`);
@@ -937,6 +1616,15 @@ async def get_research_dashboard():
                     // Note: Removed redundant loadAccumulatedStrategyElements call here to reduce API load
                     // The main strategy calls in replay functions already handle fractal accumulation
                     
+                    // Handle swing recalculation events - reload all swings (avoid double reload)
+                    if (results.lookback_recalculation || results.swing_invalidated) {
+                        const reason = results.lookback_recalculation ? 'lookback window change' : 'swing invalidation';
+                        console.log(`🔄 SWING RECALCULATION: Reloading all swings due to ${reason}`);
+                        setTimeout(() => {
+                            loadAllStrategyElements();
+                        }, 100);
+                    }
+
                     // Add new swings to chart ONLY if checkbox is checked
                     if (results.new_swing && document.getElementById('showSwings').checked) {
                         addNewSwingToChart(results.new_swing);
@@ -1128,6 +1816,9 @@ async def get_research_dashboard():
                 
                 // ✅ Initialize proper marker management
                 fractalManager = new FractalMarkerManager(candlestickSeries);
+                swingLineManager = new SwingLineManager(candlestickSeries);
+                fibonacciManager = new FibonacciLevelManager(candlestickSeries);
+                lookbackManager = new LookbackIndicatorManager();
                 
                 // Initialize professional tools system
                 selectTool('cursor');
@@ -1157,6 +1848,7 @@ async def get_research_dashboard():
                 userHasManuallyPanned = false;
                 allMarkers = []; // Clear all fractal/signal markers
                 accumulatedFractals = []; // Clear accumulated fractals for new data
+                accumulatedSwings = []; // Clear accumulated swings for new data
 
                 // FIXED: Clear full chart data cache to force regeneration
                 window.fullChartData = null;
@@ -1346,27 +2038,29 @@ async def get_research_dashboard():
             
             // Add swings to chart
             function addSwingsToChart(swings) {
-                if (!swingSeries) return;
+                if (!swingLineManager || !swings || swings.length === 0) return;
                 
-                swings.forEach(swing => {
-                    const startTime = Math.floor(new Date(swing.start_timestamp).getTime() / 1000);
-                    const endTime = Math.floor(new Date(swing.end_timestamp).getTime() / 1000);
-                    
-                    // Create swing line data
-                    const swingData = [
-                        { time: startTime, value: swing.start_price },
-                        { time: endTime, value: swing.end_price }
-                    ];
-                    
-                    // Add swing line WITHOUT TITLE to avoid text labels
-                    const swingLine = chart.addLineSeries({
-                        color: swing.direction === 'up' ? '#26a69a' : '#ef5350',
-                        lineWidth: 2,
-                        // NO TITLE - this prevents text labels on chart
-                    });
-                    
-                    swingLine.setData(swingData);
-                });
+                // Convert swings to proper format and add to accumulated swings
+                const convertedSwings = swings.map(swing => ({
+                    start_fractal: {
+                        timestamp: swing.start_timestamp,
+                        price: swing.start_price
+                    },
+                    end_fractal: {
+                        timestamp: swing.end_timestamp,
+                        price: swing.end_price
+                    },
+                    direction: swing.direction,
+                    points: swing.points || Math.abs(swing.end_price - swing.start_price),
+                    bars: swing.bars || 0,
+                    is_dominant: swing.is_dominant || false
+                }));
+                
+                // Add to accumulated swings and load via manager
+                accumulatedSwings.push(...convertedSwings);
+                swingLineManager.loadAllSwings(convertedSwings);
+                
+                console.log(`📊 Loaded ${swings.length} swing lines from database`);
             }
             
             // Add signals to chart
@@ -1398,20 +2092,125 @@ async def get_research_dashboard():
             
             // ✅ NEW PROPER MARKER SYSTEM
             function updateAllMarkers() {
-                if (!fractalManager || !document.getElementById('showFractals').checked) {
-                    // Clear fractals if checkbox is unchecked
-                    if (fractalManager) {
-                        fractalManager.clearFractals();
+                try {
+                    console.log('🔄 Updating all chart markers and lines...');
+                    
+                    // Safety check for managers
+                    if (!fractalManager || !swingLineManager || !fibonacciManager) {
+                        console.warn('Marker managers not initialized yet');
+                        return;
                     }
-                    console.log('Fractals hidden by checkbox');
-                    return;
-                }
+                    
+                    // Handle fractals
+                    if (!document.getElementById('showFractals').checked) {
+                        fractalManager.clearFractals();
+                        console.log('Fractals hidden by checkbox');
+                    } else {
+                        // Load all accumulated fractals using proper marker management
+                        if (accumulatedFractals.length > 0) {
+                            fractalManager.loadAllFractals(accumulatedFractals);
+                            console.log(`📍 Showing ${accumulatedFractals.length} fractals`);
+                        } else {
+                            console.log('No fractals accumulated yet');
+                        }
+                    }
+                    
+                    // Handle swing lines
+                    if (!document.getElementById('showSwings').checked) {
+                        swingLineManager.removeAllSwingLines();
+                        console.log('Swing lines hidden by checkbox');
+                    } else {
+                        // Load all accumulated swings using proper line management
+                        if (accumulatedSwings.length > 0) {
+                            swingLineManager.loadAllSwings(accumulatedSwings);
+                            console.log(`📈 Showing ${accumulatedSwings.length} swing lines`);
+                        } else {
+                            console.log('No swings accumulated yet');
+                        }
+                    }
 
-                // Load all accumulated fractals using proper marker management
-                if (accumulatedFractals.length > 0) {
-                    fractalManager.loadAllFractals(accumulatedFractals);
+                    // Handle Fibonacci levels
+                    if (!document.getElementById('showFibonacci').checked) {
+                        fibonacciManager.clearFibonacci();
+                        console.log('Fibonacci levels hidden by checkbox');
+                    } else {
+                        // Show Fibonacci levels for the dominant swing
+                        if (accumulatedFibonacci && accumulatedFibonacci.length > 0 && accumulatedDominantSwing) {
+                            fibonacciManager.updateFibonacciLevels(accumulatedFibonacci, accumulatedDominantSwing);
+                            console.log(`📐 Showing ${accumulatedFibonacci.length} Fibonacci levels`);
+                        } else {
+                            console.log('No Fibonacci levels or dominant swing available yet');
+                        }
+                    }
+
+                    console.log('✅ Marker update completed successfully');
+                } catch (error) {
+                    console.error('❌ Error updating markers:', error);
+                    // Don't throw - prevent browser freeze
                 }
             }
+
+            // ✅ LOOKBACK PERIOD INDICATOR MANAGER
+            class LookbackIndicatorManager {
+                constructor() {
+                    this.lookbackLine = null;
+                }
+                
+                updateLookbackIndicator(currentPosition) {
+                    if (!chart || !window.fullChartData || currentPosition >= window.fullChartData.length) return;
+                    
+                    // Remove existing lookback line if it exists
+                    this.removeLookbackLine();
+                    
+                    const lookbackCandles = parseInt(document.getElementById('lookbackCandles').value) || 140;
+                    const lookbackPosition = Math.max(0, currentPosition - lookbackCandles);
+                    
+                    if (lookbackPosition < window.fullChartData.length) {
+                        const lookbackTime = window.fullChartData[lookbackPosition].time;
+                        
+                        // Create a vertical line using line series (proper vertical line)
+                        // Get price range for vertical line
+                        const lookbackData = window.fullChartData[lookbackPosition];
+                        const minPrice = lookbackData.low * 0.999; // Slightly below low
+                        const maxPrice = lookbackData.high * 1.001; // Slightly above high
+                        
+                        // Create vertical line data points
+                        const verticalLineData = [
+                            { time: lookbackTime, value: minPrice },
+                            { time: lookbackTime, value: maxPrice }
+                        ];
+                        
+                        // Create line series for vertical lookback indicator
+                        this.lookbackLine = chart.addLineSeries({
+                            color: '#9E9E9E', // Gray color
+                            lineWidth: 2,
+                            lineStyle: 1, // Dashed line
+                            priceLineVisible: false,
+                            lastValueVisible: false,
+                            title: `Lookback Start (${lookbackCandles} bars)`,
+                            crosshairMarkerVisible: false
+                        });
+                        
+                        this.lookbackLine.setData(verticalLineData);
+                        
+                        console.log(`📏 Vertical lookback line created at position ${lookbackPosition} (${lookbackCandles} bars from current ${currentPosition})`);
+                    }
+                }
+                
+                removeLookbackLine() {
+                    if (this.lookbackLine) {
+                        chart.removeSeries(this.lookbackLine);
+                        this.lookbackLine = null;
+                    }
+                }
+                
+                isVisible() {
+                    return document.getElementById('showLookbackLine')?.checked || false;
+                }
+            }
+            
+            // Global lookback indicator manager
+            let lookbackManager = null;
 
             // Add current position indicator to show backtesting progress
             function updateCurrentPositionIndicator(position) {
@@ -1436,6 +2235,11 @@ async def get_research_dashboard():
                     axisLabelVisible: true,
                     title: `Current: ${position - (window.userStartOffset || 0) + 1}/${window.fullChartData.length - (window.userStartOffset || 0)}`,
                 });
+                
+                // Update lookback indicator
+                if (lookbackManager && lookbackManager.isVisible()) {
+                    lookbackManager.updateLookbackIndicator(position);
+                }
             }
 
             // Load all accumulated strategy elements for current position
@@ -1519,57 +2323,134 @@ async def get_research_dashboard():
             }
             
             function addNewSwingToChart(swing) {
-                if (!swing || !chart) return;
+                if (!swing || !swingLineManager) return;
                 
-                const startTime = Math.floor(new Date(swing.start_fractal.timestamp).getTime() / 1000);
-                const endTime = Math.floor(new Date(swing.end_fractal.timestamp).getTime() / 1000);
+                // Check if this swing already exists to avoid duplicates
+                const exists = accumulatedSwings.some(s => 
+                    s.start_fractal.timestamp === swing.start_fractal.timestamp && 
+                    s.end_fractal.timestamp === swing.end_fractal.timestamp &&
+                    s.direction === swing.direction
+                );
                 
-                // Create swing line data
-                const swingData = [
-                    { time: startTime, value: swing.start_fractal.price },
-                    { time: endTime, value: swing.end_fractal.price }
-                ];
-                
-                // Add swing line (no title to avoid text clutter)
-                const swingLine = chart.addLineSeries({
-                    color: swing.direction === 'up' ? '#26a69a' : '#ef5350',
-                    lineWidth: 2,
-                    // No title to avoid text labels on chart
+                if (!exists) {
+                    // Add to accumulated swings array
+                    accumulatedSwings.push(swing);
+                    console.log(`📈 New swing detected: ${swing.direction} swing from ${swing.start_fractal.timestamp} to ${swing.end_fractal.timestamp}, total: ${accumulatedSwings.length}`);
+                    
+                    // 🚨 CRITICAL: Recalculate dominance for all accumulated swings
+                    // This ensures only the largest swing overall is marked as dominant
+                    updateSwingDominance();
+                    
+                    // Reload all swings with corrected dominance
+                    if (document.getElementById('showSwings').checked) {
+                        swingLineManager.loadAllSwings(accumulatedSwings);
+                    }
+                } else {
+                    console.log(`⚠️ DUPLICATE: Swing from ${swing.start_fractal.timestamp} to ${swing.end_fractal.timestamp} already exists, skipping`);
+                }
+            }
+            
+            function updateSwingDominance() {
+                // 🚨 CRITICAL FIX: Don't override backend dominance logic!
+                // The backend strategy already calculates dominance correctly using Elliott Wave principles
+                // Frontend should RESPECT the backend's dominance determination, not recalculate it
+
+                console.log('📊 Preserving backend-calculated swing dominance (no frontend override)');
+
+                // Find the swing that's already marked as dominant by the backend
+                let backendDominantSwing = null;
+                accumulatedSwings.forEach(swing => {
+                    if (swing.is_dominant) {
+                        backendDominantSwing = swing;
+                        const magnitude = Math.abs(swing.points || Math.abs(swing.end_fractal.price - swing.start_fractal.price));
+                        console.log(`🎯 BACKEND DOMINANT: ${swing.direction.toUpperCase()} swing (${magnitude.toFixed(5)} pts / ${(magnitude*10000).toFixed(1)} pips) - PRESERVING`);
+                    }
                 });
+
+                // Update market bias display based on backend's dominant swing
+                if (backendDominantSwing) {
+                    const magnitude = Math.abs(backendDominantSwing.points || Math.abs(backendDominantSwing.end_fractal.price - backendDominantSwing.start_fractal.price));
+                    updateMarketBiasFromDominantSwing(backendDominantSwing, magnitude);
+
+                    // 🚨 CRITICAL FIX: Update accumulatedDominantSwing for Fibonacci manager
+                    accumulatedDominantSwing = {
+                        start_timestamp: backendDominantSwing.start_fractal.timestamp,
+                        end_timestamp: backendDominantSwing.end_fractal.timestamp,
+                        start_price: backendDominantSwing.start_fractal.price,
+                        end_price: backendDominantSwing.end_fractal.price,
+                        direction: backendDominantSwing.direction
+                    };
+                    console.log(`🔄 Updated accumulatedDominantSwing for Fibonacci manager:`, accumulatedDominantSwing);
+                } else {
+                    console.warn('⚠️ No backend-dominant swing found in accumulated swings');
+                    accumulatedDominantSwing = null; // Clear if no dominant swing
+                }
+            }
+            
+            function updateMarketBiasFromDominantSwing(dominantSwing, magnitude) {
+                // Create market bias object based on the corrected dominant swing
+                const marketBias = {
+                    bias: dominantSwing.direction === 'up' ? 'BULLISH' : 'BEARISH',
+                    direction: dominantSwing.direction === 'up' ? 'UP' : 'DOWN',
+                    points: dominantSwing.points || magnitude,
+                    trading_direction: dominantSwing.direction === 'up' ? 'LOOK FOR BUY OPPORTUNITIES' : 'LOOK FOR SELL OPPORTUNITIES'
+                };
                 
-                swingLine.setData(swingData);
-                
-                console.log(`Added ${swing.direction} swing: ${swing.points.toFixed(1)} points`);
+                console.log(`📊 CORRECTED Market Bias: ${marketBias.bias} (${marketBias.direction}) - ${marketBias.points.toFixed(5)} points (${(marketBias.points*10000).toFixed(1)} pips)`);
+                updateMarketBiasDisplay(marketBias);
             }
             
             function addFibonacciLevelsToChart(fibLevels) {
                 if (!fibLevels || !chart || !document.getElementById('showFibonacci').checked) return;
-                
-                // Only show key levels (38.2%, 50%, 61.8%) to avoid clutter
-                const keyLevels = fibLevels.filter(level => 
-                    level.level === 0.382 || level.level === 0.500 || level.level === 0.618
-                );
-                
-                keyLevels.forEach(level => {
-                    // Create horizontal line for each key Fibonacci level WITHOUT TITLE
-                    const fibLine = chart.addLineSeries({
-                        color: getFibonacciColor(level.level),
-                        lineWidth: 1,
-                        lineStyle: 2, // Dashed line
-                        // NO TITLE - this prevents text labels on chart
+
+                // Update accumulated Fibonacci levels
+                accumulatedFibonacci = fibLevels;
+
+                // Extract dominant swing information if available
+                if (fibLevels.length > 0 && fibLevels[0].swing_start_time && fibLevels[0].swing_end_time) {
+                    accumulatedDominantSwing = {
+                        start_timestamp: fibLevels[0].swing_start_time,
+                        end_timestamp: fibLevels[0].swing_end_time,
+                        start_price: fibLevels[0].swing_start_price,
+                        end_price: fibLevels[0].swing_end_price,
+                        direction: fibLevels[0].swing_direction
+                    };
+                }
+
+                // Use the professional Fibonacci manager if available
+                if (fibonacciManager && accumulatedDominantSwing) {
+                    fibonacciManager.updateFibonacciLevels(fibLevels, accumulatedDominantSwing);
+                    console.log(`📐 Updated ${fibLevels.length} Fibonacci levels using professional manager`);
+                } else {
+                    // Fallback to old method if manager not available
+                    console.warn('FibonacciManager not available, using fallback method');
+
+                    // Only show key levels (38.2%, 50%, 61.8%) to avoid clutter
+                    const keyLevels = fibLevels.filter(level =>
+                        level.level === 0.382 || level.level === 0.500 || level.level === 0.618
+                    );
+
+                    keyLevels.forEach(level => {
+                        // Create horizontal line for each key Fibonacci level WITHOUT TITLE
+                        const fibLine = chart.addLineSeries({
+                            color: getFibonacciColor(level.level),
+                            lineWidth: 0.5, // Thinner lines to reduce clutter
+                            lineStyle: 2, // Dashed line
+                            // NO TITLE - this prevents text labels on chart
+                        });
+
+                        // Create line data for limited visible range
+                        const currentTime = Math.floor(Date.now() / 1000);
+                        const fibData = [
+                            { time: currentTime - 7200, value: level.price }, // 2 hours ago
+                            { time: currentTime + 7200, value: level.price }  // 2 hours ahead
+                        ];
+
+                        fibLine.setData(fibData);
                     });
-                    
-                    // Create line data for limited visible range
-                    const currentTime = Math.floor(Date.now() / 1000);
-                    const fibData = [
-                        { time: currentTime - 7200, value: level.price }, // 2 hours ago
-                        { time: currentTime + 7200, value: level.price }  // 2 hours ahead
-                    ];
-                    
-                    fibLine.setData(fibData);
-                });
-                
-                console.log(`Added ${keyLevels.length} key Fibonacci levels (filtered from ${fibLevels.length})`);
+
+                    console.log(`Added ${keyLevels.length} key Fibonacci levels (filtered from ${fibLevels.length})`);
+                }
             }
             
             function getFibonacciColor(level) {
@@ -1749,7 +2630,9 @@ async def get_research_dashboard():
                         await loadBacktestingEngine(symbol, timeframe, startDate, endDate);
                         
                         // Load data into backtesting engine for interactive analysis
-                        console.log('🔄 Loading data into backtesting engine...', {symbol, timeframe, startDate, endDate});
+                        const fractalPeriods = parseInt(document.getElementById('fractalPeriods').value) || 5;
+                        const lookbackCandles = parseInt(document.getElementById('lookbackCandles').value) || 140;
+                        console.log('🔄 Loading data into backtesting engine...', {symbol, timeframe, startDate, endDate, fractalPeriods, lookbackCandles});
                         const backtestResponse = await fetch('/api/backtest/load', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -1758,7 +2641,9 @@ async def get_research_dashboard():
                                 timeframe: timeframe,
                                 start_date: startDate,
                                 end_date: endDate,
-                                limit: null
+                                limit: null,
+                                fractal_periods: fractalPeriods,
+                                lookback_candles: lookbackCandles
                             })
                         });
                         
@@ -1846,14 +2731,50 @@ async def get_research_dashboard():
                 console.log('🔄 Refreshing chart elements based on settings...');
                 
                 if (!chart || !candlestickSeries) {
-                    console.warn('Chart not initialized yet');
+                    console.warn('Chart not initialized yet - skipping refresh');
                     return;
                 }
                 
-                // Simply update markers based on checkbox states - no need to recreate chart
-                updateAllMarkers();
+                // Check if fractal periods changed - if so, need to reload backend data
+                const currentFractalPeriods = parseInt(document.getElementById('fractalPeriods').value) || 5;
+                const symbolSelect = document.getElementById('symbolSelect');
+                const timeframeSelect = document.getElementById('timeframeSelect');
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
                 
-                console.log('✅ Chart elements refreshed');
+                if (symbolSelect && symbolSelect.value && startDate && endDate) {
+                    console.log(`🔄 Fractal periods changed to ${currentFractalPeriods}, reloading backend data...`);
+                    
+                    // Reload backend with new fractal periods (non-blocking)
+                    loadBacktestingEngine(symbolSelect.value, timeframeSelect.value, startDate, endDate)
+                        .then(() => {
+                            console.log('✅ Backend reloaded with new fractal periods');
+                            // Update display after backend reload
+                            updateAllMarkers();
+                        })
+                        .catch(error => {
+                            console.warn('Backend reload failed, updating display only:', error);
+                            // Still update display even if backend fails
+                            updateAllMarkers();
+                        });
+                } else {
+                    // No data loaded yet, just update display
+                    updateAllMarkers();
+                }
+                
+                // Handle lookback line visibility
+                if (lookbackManager) {
+                    const showLookbackLine = document.getElementById('showLookbackLine').checked;
+                    if (showLookbackLine && currentPosition >= 0) {
+                        // Show lookback line at current position
+                        lookbackManager.updateLookbackIndicator(currentPosition);
+                    } else {
+                        // Hide lookback line
+                        lookbackManager.removeLookbackLine();
+                    }
+                }
+                
+                console.log('✅ Chart elements refresh initiated');
             }
             
             // Load all strategy elements from the database (bypassing broken JSON endpoints)
@@ -1868,7 +2789,8 @@ async def get_research_dashboard():
                     const endDate = document.getElementById('endDate').value;
                     
                     // Load fractals directly from database endpoint
-                    const fractalsResponse = await fetch(`/api/fractals?symbol=${symbol}&timeframe=${timeframe}&start_date=${startDate}&end_date=${endDate}`);
+                    const fractalPeriods = parseInt(document.getElementById('fractalPeriods').value) || 5;
+                    const fractalsResponse = await fetch(`/api/fractals?symbol=${symbol}&timeframe=${timeframe}&start_date=${startDate}&end_date=${endDate}&periods=${fractalPeriods}`);
                     const fractalsResult = await fractalsResponse.json();
                     
                     if (fractalsResult.success && fractalsResult.fractals) {
@@ -1917,7 +2839,8 @@ async def get_research_dashboard():
             async function loadChartOverlays(symbol, timeframe, startDate, endDate) {
                 try {
                     // Load fractals
-                    const fractalsResponse = await fetch(`/api/fractals?symbol=${symbol}&timeframe=${timeframe}&start_date=${startDate}&end_date=${endDate}`);
+                    const fractalPeriods = parseInt(document.getElementById('fractalPeriods').value) || 5;
+                    const fractalsResponse = await fetch(`/api/fractals?symbol=${symbol}&timeframe=${timeframe}&start_date=${startDate}&end_date=${endDate}&periods=${fractalPeriods}`);
                     const fractalsResult = await fractalsResponse.json();
                     if (fractalsResult.success && document.getElementById('showFractals').checked) {
                         addFractalsToChart(fractalsResult.fractals);
@@ -2251,6 +3174,43 @@ async def get_research_dashboard():
                 document.getElementById('currentLow').textContent = barData.low ? barData.low.toFixed(5) : '-';
                 document.getElementById('currentClose').textContent = barData.close ? barData.close.toFixed(5) : '-';
                 document.getElementById('currentVolume').textContent = barData.volume || '0';
+            }
+            
+            function updateMarketBiasDisplay(marketBias) {
+                if (!marketBias) return;
+                
+                console.log('📊 Updating market bias:', marketBias);
+                
+                // Update sentiment with color coding
+                const sentimentElement = document.getElementById('marketSentiment');
+                sentimentElement.textContent = marketBias.bias;
+                
+                // Color code the sentiment
+                if (marketBias.bias === 'BULLISH') {
+                    sentimentElement.style.color = '#00E676'; // Bright green
+                } else if (marketBias.bias === 'BEARISH') {
+                    sentimentElement.style.color = '#FF1744'; // Bright red
+                } else {
+                    sentimentElement.style.color = '#FFD700'; // Gold for neutral
+                }
+                
+                // Update direction
+                document.getElementById('marketDirection').textContent = marketBias.direction;
+                
+                // Update points with both price and pips
+                document.getElementById('dominantPoints').textContent = `${marketBias.points.toFixed(5)} (${(marketBias.points*10000).toFixed(1)} pips)`;
+                
+                // Update trading direction with color coding
+                const tradingDirectionElement = document.getElementById('tradingDirection');
+                tradingDirectionElement.textContent = marketBias.trading_direction;
+                
+                if (marketBias.bias === 'BULLISH') {
+                    tradingDirectionElement.style.color = '#00E676'; // Bright green for buy
+                } else if (marketBias.bias === 'BEARISH') {
+                    tradingDirectionElement.style.color = '#FF1744'; // Bright red for sell
+                } else {
+                    tradingDirectionElement.style.color = '#FFD700'; // Gold for neutral
+                }
             }
             
             function updatePerformanceMetrics(results) {
@@ -2736,6 +3696,10 @@ async def get_research_dashboard():
                     initChart();
                     console.log('✅ Chart initialized successfully');
                     
+                    // Initialize lookback indicator manager
+                    lookbackManager = new LookbackIndicatorManager();
+                    console.log('✅ Lookback indicator manager initialized');
+                    
                     initWebSocket();
                     console.log('✅ WebSocket initialized');
                     
@@ -2802,6 +3766,58 @@ async def get_research_dashboard():
                 }
                 console.log('🧹 Page loaded: cleaned up any leftover intervals');
             });
+
+            // 🚨 CRITICAL FIX: Function to reload current swing state when recalculation happens
+            let swingStateReloadTimeout = null;
+            async function reloadCurrentSwingState() {
+                // Debounce rapid calls to prevent flashing
+                if (swingStateReloadTimeout) {
+                    clearTimeout(swingStateReloadTimeout);
+                }
+                
+                swingStateReloadTimeout = setTimeout(async () => {
+                    try {
+                        const symbol = document.getElementById('symbolSelect').value;
+                        const timeframe = document.getElementById('timeframeSelect').value;
+                        
+                        if (!symbol || !timeframe) {
+                            console.log('⚠️ No symbol/timeframe selected for swing state reload');
+                            return;
+                        }
+                        
+                        console.log('🔄 Reloading current swing state from backend...');
+                        const response = await fetch(`/api/strategy/current-state?symbol=${symbol}&timeframe=${timeframe}`);
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            
+                            if (data.swings && data.swings.length > 0) {
+                                // Clear and reload swings
+                                accumulatedSwings = data.swings;
+                                console.log(`🔥 Reloaded ${data.swings.length} swings from backend`);
+                                
+                                // Find dominant swing
+                                accumulatedDominantSwing = data.swings.find(s => s.is_dominant) || null;
+                                
+                                // Update display if swings are enabled
+                                if (document.getElementById('showSwings').checked && swingLineManager) {
+                                    swingLineManager.loadAllSwings(accumulatedSwings);
+                                    console.log(`✅ Swing lines updated on chart`);
+                                }
+                            }
+                            
+                            if (data.fibonacci_levels && data.fibonacci_levels.length > 0) {
+                                accumulatedFibonacci = data.fibonacci_levels;
+                                console.log(`📐 Reloaded ${data.fibonacci_levels.length} Fibonacci levels`);
+                            }
+                        } else {
+                            console.error('❌ Failed to reload swing state:', response.status);
+                        }
+                    } catch (error) {
+                        console.error('❌ Error reloading swing state:', error);
+                    }
+                }, 100); // 100ms debounce delay
+            }
 
             window.onbeforeunload = function() {
                 if (websocket) {
@@ -3063,7 +4079,8 @@ async def get_fractals(
     symbol: str = Query(...),
     timeframe: str = Query(...),
     start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None)
+    end_date: Optional[str] = Query(None),
+    periods: Optional[int] = Query(5, description="Number of periods for fractal detection")
 ):
     """Get fractals for the chart overlay."""
     try:
@@ -3310,11 +4327,23 @@ async def load_backtest_data(request: DataRequest):
                 "message": f"No data found for {request.symbol} {request.timeframe}"
             })
         
+        # Create backtesting engine with fractal and lookback configuration
+        logger.info(f"🔄 Creating backtesting engine with fractal_periods={request.fractal_periods}, lookback_candles={request.lookback_candles}...")
+        strategy_config = {
+            'fractal_periods': request.fractal_periods or 5,
+            'min_swing_points': 10.0,  # Lower threshold for DJ30 M1 data - was 50.0
+            'lookback_candles': request.lookback_candles or 140
+        }
+        
+        # Create new engine instance with configuration or reconfigure existing one
+        global backtesting_engine
+        backtesting_engine = BacktestingEngine(strategy_config=strategy_config)
+        
         # Load data into backtesting engine
         logger.info(f"🔄 Loading {len(df)} bars into backtesting engine...")
         try:
             backtesting_engine.load_data(df)
-            logger.info(f"✅ Successfully loaded {len(df)} bars into backtesting engine")
+            logger.info(f"✅ Successfully loaded {len(df)} bars into backtesting engine with {request.fractal_periods} fractal periods")
         except Exception as e:
             logger.error(f"❌ Failed to load data into backtesting engine: {e}")
             raise
@@ -3487,6 +4516,45 @@ async def get_backtest_state():
         
     except Exception as e:
         logger.error(f"Error getting backtest state: {e}")
+        return JSONResponse({
+            "success": False,
+            "message": str(e)
+        })
+
+@app.get("/api/strategy/current-state")
+async def get_current_strategy_state(
+    symbol: str = Query(...),
+    timeframe: str = Query(...)
+):
+    """Get current strategy state with all swings and fibonacci levels."""
+    try:
+        # Get strategy state from the backtesting engine
+        if hasattr(backtesting_engine, 'strategy') and backtesting_engine.strategy:
+            strategy_state = backtesting_engine.strategy.get_current_state()
+            
+            logger.debug(f"🔍 Current strategy state: {len(strategy_state.get('swings', []))} swings, {len(strategy_state.get('fibonacci_levels', []))} fib levels")
+            
+            return JSONResponse({
+                "success": True,
+                "swings": strategy_state.get('swings', []),
+                "fibonacci_levels": strategy_state.get('fibonacci_levels', []),
+                "dominant_swing": strategy_state.get('dominant_swing'),
+                "fractals": strategy_state.get('fractals', []),
+                "signals": strategy_state.get('signals', [])
+            })
+        else:
+            logger.warning("No strategy available for current state")
+            return JSONResponse({
+                "success": True,
+                "swings": [],
+                "fibonacci_levels": [],
+                "dominant_swing": None,
+                "fractals": [],
+                "signals": []
+            })
+            
+    except Exception as e:
+        logger.error(f"Error getting current strategy state: {e}")
         return JSONResponse({
             "success": False,
             "message": str(e)
