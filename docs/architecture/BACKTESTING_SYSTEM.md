@@ -288,8 +288,232 @@ class PatternAnalyzer:
 - ML-ready datasets
 - Chart snapshots and annotations
 
-## Phase 6: ML/AI Integration Preparation
-Set up infrastructure for future ML:
+## Phase 6: Confluence Factor Testing Infrastructure ✅ NEW
+Implement comprehensive factor testing and validation system:
+
+### Factor Testing Architecture
+```python
+# src/backtesting/factor_tester.py
+class FactorTester:
+    """Systematic testing of confluence factor combinations"""
+    
+    def __init__(self, backtesting_engine: BacktestingEngine):
+        self.engine = backtesting_engine
+        self.factor_registry = FactorRegistry()
+        self.test_results = TestResultsDatabase()
+    
+    def test_single_factor(self, factor_name: str, test_periods: List[DateRange]) -> FactorTestResult:
+        """Test individual factor across multiple time periods"""
+        
+    def test_factor_combination(self, factors: List[str], weights: Dict[str, float]) -> CombinationTestResult:
+        """Test specific factor combination with given weights"""
+        
+    def run_exhaustive_testing(self, max_factors: int = 5) -> ExhaustiveTestResults:
+        """Test all possible combinations up to max_factors"""
+        
+    def factor_importance_analysis(self, factors: List[str]) -> FactorImportanceReport:
+        """Analyze individual factor contributions using statistical methods"""
+        
+    def optimal_weight_discovery(self, factors: List[str]) -> OptimalWeights:
+        """Find optimal weights using grid search or optimization algorithms"""
+```
+
+### Testing Methodologies
+
+#### 1. A/B Testing Framework 🧪
+```python
+class ABTestFramework:
+    """Statistical A/B testing for factors"""
+    
+    def compare_factors(self, factor_a: str, factor_b: str) -> ABTestResult:
+        """Head-to-head factor comparison with statistical significance"""
+        
+    def baseline_vs_enhanced(self, baseline_factors: List[str], 
+                           enhancement_factor: str) -> BaselineTestResult:
+        """Test if adding enhancement factor improves baseline performance"""
+        
+    def multi_arm_bandit_test(self, factor_combinations: List[Dict]) -> BanditTestResult:
+        """Dynamic allocation testing for multiple factor combinations"""
+```
+
+#### 2. Walk-Forward Analysis 📈
+```python
+class WalkForwardTester:
+    """Time-series specific testing with proper temporal validation"""
+    
+    def walk_forward_optimization(self, factors: List[str], 
+                                in_sample_period: int, 
+                                out_sample_period: int) -> WalkForwardResults:
+        """Rolling optimization with out-of-sample validation"""
+        
+    def regime_based_testing(self, factors: List[str]) -> RegimeTestResults:
+        """Test factor performance across different market regimes"""
+        
+    def stability_analysis(self, factors: List[str]) -> StabilityReport:
+        """Analyze factor performance stability over time"""
+```
+
+### Factor Performance Metrics
+
+#### 1. Statistical Validation 📊
+```python
+class FactorMetrics:
+    """Comprehensive factor performance measurement"""
+    
+    def calculate_factor_significance(self, factor_results: FactorTestResult) -> SignificanceTest:
+        """Statistical significance testing (t-test, Mann-Whitney U, etc.)"""
+        
+    def information_ratio(self, factor_returns: List[float], benchmark_returns: List[float]) -> float:
+        """Risk-adjusted excess return measurement"""
+        
+    def factor_turnover(self, factor_signals: List[Signal]) -> TurnoverMetrics:
+        """Signal frequency and transaction cost impact"""
+        
+    def regime_robustness(self, factor_results: List[FactorTestResult]) -> RobustnessScore:
+        """Performance consistency across market conditions"""
+```
+
+#### 2. Risk Assessment 🛡️
+```python
+class FactorRiskAnalysis:
+    """Risk-focused factor evaluation"""
+    
+    def drawdown_analysis(self, factor_equity_curve: List[float]) -> DrawdownMetrics:
+        """Maximum drawdown, recovery time, drawdown frequency"""
+        
+    def tail_risk_assessment(self, factor_returns: List[float]) -> TailRiskMetrics:
+        """VaR, CVaR, extreme loss probability"""
+        
+    def correlation_analysis(self, factors: List[str]) -> CorrelationMatrix:
+        """Factor correlation and diversification benefits"""
+        
+    def overfitting_detection(self, in_sample: TestResult, out_sample: TestResult) -> OverfitScore:
+        """Detect overfitting through performance degradation"""
+```
+
+### Testing Database Schema
+
+#### Extended Database Tables for Factor Testing
+```sql
+-- Factor test runs and results
+CREATE TABLE factor_test_runs (
+    id UUID PRIMARY KEY,
+    test_type VARCHAR(50) NOT NULL, -- 'single_factor', 'combination', 'exhaustive'
+    factors_tested JSONB NOT NULL,
+    factor_weights JSONB,
+    test_period_start TIMESTAMP NOT NULL,
+    test_period_end TIMESTAMP NOT NULL,
+    market_regime VARCHAR(20), -- 'bull', 'bear', 'sideways', 'volatile'
+    total_trades INTEGER,
+    win_rate FLOAT,
+    profit_factor FLOAT,
+    sharpe_ratio FLOAT,
+    sortino_ratio FLOAT,
+    max_drawdown FLOAT,
+    calmar_ratio FLOAT,
+    statistical_significance FLOAT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Individual factor performance tracking
+CREATE TABLE factor_performance (
+    id UUID PRIMARY KEY,
+    factor_name VARCHAR(100) NOT NULL,
+    test_run_id UUID REFERENCES factor_test_runs(id),
+    individual_contribution FLOAT,
+    correlation_with_returns FLOAT,
+    signal_frequency INTEGER,
+    avg_signal_strength FLOAT,
+    factor_stability_score FLOAT,
+    implementation_cost_ms FLOAT
+);
+
+-- Factor combination optimization results
+CREATE TABLE factor_combinations (
+    id UUID PRIMARY KEY,
+    combination_hash VARCHAR(64) UNIQUE, -- Hash of factor names + weights
+    factors JSONB NOT NULL,
+    optimal_weights JSONB NOT NULL,
+    performance_score FLOAT,
+    risk_score FLOAT,
+    combined_score FLOAT,
+    optimization_method VARCHAR(50), -- 'grid_search', 'genetic_algorithm', 'bayesian'
+    validation_score FLOAT, -- Out-of-sample performance
+    last_tested TIMESTAMP DEFAULT NOW()
+);
+
+-- A/B test results for statistical comparison
+CREATE TABLE ab_test_results (
+    id UUID PRIMARY KEY,
+    test_name VARCHAR(200) NOT NULL,
+    factor_a JSONB NOT NULL,
+    factor_b JSONB NOT NULL,
+    test_duration_days INTEGER,
+    trades_a INTEGER,
+    trades_b INTEGER,
+    returns_a FLOAT,
+    returns_b FLOAT,
+    p_value FLOAT,
+    confidence_level FLOAT,
+    winner VARCHAR(1), -- 'A', 'B', or 'N' (no significant difference)
+    effect_size FLOAT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### Factor Testing Workflows
+
+#### 1. New Factor Integration Workflow 🔄
+```python
+class FactorIntegrationPipeline:
+    """Standardized process for adding new factors"""
+    
+    def validate_new_factor(self, factor: ConfluenceFactor) -> ValidationResult:
+        """
+        1. Interface compliance check
+        2. Performance benchmarking
+        3. Data requirement validation
+        4. Computational cost assessment
+        """
+        
+    def baseline_performance_test(self, factor: ConfluenceFactor) -> BaselineTest:
+        """
+        Test factor in isolation against random signals and 
+        basic Fibonacci-only signals
+        """
+        
+    def integration_test(self, factor: ConfluenceFactor, 
+                        existing_factors: List[str]) -> IntegrationTest:
+        """
+        Test factor in combination with existing best-performing factors
+        """
+        
+    def production_readiness_check(self, factor: ConfluenceFactor) -> ReadinessReport:
+        """
+        Final validation before production deployment
+        """
+```
+
+#### 2. Continuous Factor Monitoring 📡
+```python
+class FactorMonitor:
+    """Real-time monitoring of factor performance in production"""
+    
+    def real_time_performance_tracking(self) -> PerformanceMetrics:
+        """Track factor performance in live trading"""
+        
+    def regime_change_detection(self) -> RegimeChangeAlert:
+        """Detect when market regime changes affect factor performance"""
+        
+    def factor_decay_analysis(self) -> DecayReport:
+        """Monitor for factor performance degradation over time"""
+        
+    def auto_rebalancing_suggestions(self) -> RebalancingRecommendations:
+        """Suggest factor weight adjustments based on recent performance"""
+```
+
+## Phase 7: ML/AI Integration Preparation
+Enhanced ML infrastructure building on factor testing foundation:
 
 ### Feature Engineering Pipeline
 ```python
@@ -351,11 +575,12 @@ class FeatureEngineer:
 - **Compression**: Native PostgreSQL compression
 
 ## Implementation Timeline
-- **Week 1-2**: Database schema + MT4 data import
-- **Week 3-4**: TradingView-style charting system
-- **Week 5-6**: VectorBT integration + replay engine
-- **Week 7-8**: Research tools + statistical analysis
-- **Week 9-10**: ML preparation + testing
+- **Week 1-2**: Database schema + MT4 data import ✅ COMPLETED
+- **Week 3-4**: TradingView-style charting system ✅ COMPLETED
+- **Week 5-6**: VectorBT integration + replay engine ✅ COMPLETED
+- **Week 7-8**: Signal generation + factor testing infrastructure 🎯 CURRENT
+- **Week 9-10**: Factor library + A/B testing framework
+- **Week 11-12**: ML preparation + automated optimization
 
 ## Key Success Factors
 1. **Visual First**: TradingView-quality charts for verification
@@ -370,9 +595,11 @@ trading_bot/
 ├── src/
 │   ├── backtesting/
 │   │   ├── __init__.py
-│   │   ├── engine.py          # VectorBT integration
-│   │   ├── replay.py          # Chart replay system
+│   │   ├── engine.py          # VectorBT integration ✅
+│   │   ├── replay.py          # Chart replay system ✅
 │   │   ├── analysis.py        # Statistical tools
+│   │   ├── factor_tester.py   # Factor testing framework ✅ NEW
+│   │   ├── signal_generator.py # Signal generation system 🎯 NEW
 │   │   └── ml_prep.py         # ML data preparation
 │   ├── research/
 │   │   ├── __init__.py

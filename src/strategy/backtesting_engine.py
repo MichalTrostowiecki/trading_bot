@@ -19,18 +19,26 @@ class BacktestingEngine:
     Processes one bar at a time and updates strategy state.
     """
     
-    def __init__(self, initial_capital: float = 10000.0):
+    def __init__(self, initial_capital: float = 10000.0, strategy_config: Dict[str, Any] = None):
         """
         Initialize backtesting engine.
         
         Args:
             initial_capital: Starting capital for backtesting
+            strategy_config: Configuration parameters for the strategy
         """
         self.initial_capital = initial_capital
         self.current_capital = initial_capital
         
-        # Strategy instance
-        self.strategy = FibonacciStrategy()
+        # Strategy instance with configurable parameters
+        strategy_config = strategy_config or {}
+        self.strategy = FibonacciStrategy(
+            fractal_period=strategy_config.get('fractal_periods', 5),
+            min_swing_points=strategy_config.get('min_swing_points', 50.0),
+            fibonacci_levels=strategy_config.get('fibonacci_levels', None),
+            risk_reward_ratio=strategy_config.get('risk_reward_ratio', 2.0),
+            lookback_candles=strategy_config.get('lookback_candles', 140)
+        )
         
         # Trading state
         self.current_position = None  # 'long', 'short', or None

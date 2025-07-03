@@ -229,7 +229,255 @@ dominant_swing:
 
 ---
 
-## Next Steps
+## Round 5: Confluence Factor Architecture & Extensible Signal System ✅ NEW
+
+### Strategic Vision: Unlimited Factor Testing Framework
+
+The core Fibonacci strategy serves as the **foundation signal**, with an **extensible confluence factor system** that allows systematic testing of unlimited additional factors to enhance signal quality and filter trades.
+
+### Architecture Philosophy
+
+#### 1. Modular Signal Generation ✅
+**Q: How should the signal system handle multiple confluence factors?**
+**A: PLUG-AND-PLAY ARCHITECTURE. Each confluence factor is an independent module that can be added, removed, or weighted without affecting other factors. The system combines factors using configurable logic (AND, OR, weighted scoring) for maximum flexibility.**
+
+#### 2. Scientific Testing Framework ✅
+**Q: How do we determine which factors actually improve performance?**
+**A: SYSTEMATIC A/B TESTING. Build comprehensive testing infrastructure that can automatically test thousands of factor combinations, measure statistical significance, and rank factor importance. Every factor addition must be validated through backtesting.**
+
+#### 3. Baseline vs Enhanced Signals ✅
+**Q: Should we start with basic Fibonacci signals or add all factors immediately?**
+**A: FOUNDATION-FIRST APPROACH. Start with pure Fibonacci signals as baseline, then incrementally add factors one-by-one. This allows isolation of variable impact and ensures each factor genuinely adds value.**
+
+### Confluence Factor Categories
+
+#### 1. Time-Based Factors 🕐
+**Market Session Factors:**
+- `LondonSessionFactor`: Enhanced volatility and breakout probability during London open
+- `NewYorkSessionFactor`: Momentum continuation during NY session overlap
+- `AsianSessionFactor`: Range-bound behavior and reversal opportunities
+- `SessionOverlapFactor`: Increased volatility during session transitions
+
+**Temporal Factors:**
+- `MarketOpenFactor`: Price behavior around major market opens
+- `EconomicNewsFactor`: Time-based filtering around news events
+- `DayOfWeekFactor`: Performance variations by weekday
+- `MonthlyExpiryFactor`: Options/futures expiry effects
+
+#### 2. Price-Level Factors 📈
+**Daily Reference Points:**
+- `DayOpenPriceFactor`: Bullish/bearish bias relative to day open
+- `PreviousCloseFactor`: Momentum continuation vs mean reversion
+- `DailyHighLowFactor`: Position within daily range
+- `GapAnalysisFactor`: Weekend/overnight gap behavior
+
+**Multi-Timeframe Levels:**
+- `WeeklyLevelsFactor`: Confluence with weekly support/resistance
+- `MonthlyLevelsFactor`: Major institutional levels
+- `PivotPointsFactor`: Traditional pivot point confluence
+- `VWAPFactor`: Volume-weighted average price deviation
+
+#### 3. Technical Indicator Factors 📊
+**Momentum Indicators:**
+- `RSIConfluenceFactor`: Overbought/oversold conditions with Fibonacci
+- `MACDFactor`: Trend confirmation and divergence analysis
+- `StochasticFactor`: Short-term momentum alignment
+- `MomentumOscillatorFactor`: Rate of change analysis
+
+**Volume Analysis:**
+- `VolumeSurgeFactor`: Unusual volume confirming breakouts
+- `VolumeProfileFactor`: High-volume nodes and value areas
+- `AccumulationFactor`: Smart money accumulation patterns
+- `DistributionFactor`: Large player distribution detection
+
+#### 4. Market Structure Factors 🏗️
+**Trend & Pattern Recognition:**
+- `TrendStrengthFactor`: ADX-based trend strength measurement
+- `BreakoutConfirmationFactor`: Valid breakout vs false breakout
+- `ConsolidationFactor`: Range-bound vs trending market identification
+- `ElliottWavePositionFactor`: Wave count confluence with Fibonacci
+
+**Volatility & Regime Detection:**
+- `VolatilityRegimeFactor`: High/low volatility environment adaptation
+- `MarketRegimeFactor`: Bull/bear/sideways market classification
+- `CorrelationFactor`: Inter-market correlation analysis
+- `SentimentFactor`: Market sentiment indicators
+
+### Implementation Architecture
+
+#### 1. Factor Interface Standard 🔧
+```python
+class ConfluenceFactor:
+    """Base class for all confluence factors"""
+    
+    def __init__(self, name: str, weight: float = 1.0):
+        self.name = name
+        self.weight = weight
+        self.enabled = True
+    
+    def evaluate(self, market_data: MarketData) -> ConfluenceScore:
+        """
+        Evaluate factor for current market conditions
+        Returns: ConfluenceScore (0.0 to 1.0 with direction)
+        """
+        raise NotImplementedError
+    
+    def get_description(self) -> str:
+        """Human-readable factor description"""
+        raise NotImplementedError
+    
+    def get_parameters(self) -> Dict[str, Any]:
+        """Return configurable parameters"""
+        raise NotImplementedError
+```
+
+#### 2. Signal Combination Logic 🧮
+```python
+class SignalGenerator:
+    """Combines Fibonacci base signal with confluence factors"""
+    
+    def __init__(self):
+        self.base_fibonacci_signal = FibonacciSignalGenerator()
+        self.confluence_factors: List[ConfluenceFactor] = []
+        self.combination_method = CombinationMethod.WEIGHTED_AVERAGE
+    
+    def add_factor(self, factor: ConfluenceFactor):
+        """Add new confluence factor to the system"""
+        self.confluence_factors.append(factor)
+    
+    def generate_signal(self, market_data: MarketData) -> TradingSignal:
+        """
+        Generate trading signal by combining:
+        1. Base Fibonacci signal (required)
+        2. All enabled confluence factors (optional enhancement)
+        """
+        # Implementation allows for multiple combination strategies
+```
+
+#### 3. Testing Framework Integration 🧪
+```python
+class FactorTester:
+    """Systematic testing of factor combinations"""
+    
+    def test_factor_combination(self, factors: List[str]) -> TestResults:
+        """Test specific factor combination"""
+        
+    def test_all_combinations(self, max_factors: int = 5) -> RankingResults:
+        """Test all possible factor combinations up to max_factors"""
+        
+    def factor_importance_analysis(self) -> FactorImportance:
+        """Determine which factors contribute most to performance"""
+        
+    def optimal_weights_discovery(self, factors: List[str]) -> OptimalWeights:
+        """Find optimal weighting for factor combination"""
+```
+
+### Configuration & Customization
+
+#### 1. Factor Configuration System ⚙️
+```yaml
+confluence_factors:
+  enabled_factors:
+    - fibonacci_base          # Always required
+    - london_session         # Optional enhancement
+    - day_open_price         # Optional enhancement
+    - rsi_confluence         # Optional enhancement
+  
+  factor_weights:
+    fibonacci_base: 1.0       # Base signal weight
+    london_session: 0.3       # Session weight
+    day_open_price: 0.2       # Price level weight
+    rsi_confluence: 0.4       # Technical indicator weight
+  
+  combination_method:
+    type: "weighted_average"   # Options: weighted_average, threshold, ml_model
+    threshold: 0.6            # Minimum combined score for signal
+    require_fibonacci: true   # Fibonacci signal must be present
+```
+
+#### 2. Dynamic Factor Management 🔄
+- **Runtime Factor Addition**: Add new factors without system restart
+- **A/B Testing Mode**: Test different factor combinations simultaneously
+- **Performance Monitoring**: Real-time factor performance tracking
+- **Auto-Optimization**: ML-driven factor weight optimization
+- **Market Regime Adaptation**: Different factor sets for different market conditions
+
+### Extensibility & Future Development
+
+#### 1. Custom Factor Development 🛠️
+```python
+# Example: Creating a new custom factor
+class CustomEconomicEventFactor(ConfluenceFactor):
+    """Custom factor for economic event impact"""
+    
+    def __init__(self, event_types: List[str], impact_duration: int):
+        super().__init__("economic_events")
+        self.event_types = event_types
+        self.impact_duration = impact_duration
+    
+    def evaluate(self, market_data: MarketData) -> ConfluenceScore:
+        # Custom logic for economic event impact
+        # Return score 0.0-1.0 with bullish/bearish direction
+        pass
+```
+
+#### 2. Machine Learning Integration 🤖
+- **Factor Discovery**: ML algorithms discover new factor combinations
+- **Non-Linear Relationships**: Neural networks find complex factor interactions
+- **Adaptive Weighting**: Dynamic factor weights based on market conditions
+- **Feature Engineering**: Automated creation of derivative factors
+- **Ensemble Methods**: Multiple factor combination strategies
+
+#### 3. Research & Development Pipeline 🔬
+- **Factor Laboratory**: Safe testing environment for experimental factors
+- **Version Control**: Track factor performance across different periods
+- **Factor Library**: Shared repository of validated factors
+- **Community Factors**: Integration with external factor providers
+- **Research Publication**: Document successful factor discoveries
+
+### Implementation Phases
+
+#### Phase 1: Foundation (Current) ✅
+- Basic Fibonacci signal generation
+- Simple factor interface
+- Manual factor addition
+- Basic A/B testing
+
+#### Phase 2: Core Factors (Next) 🎯
+- Implement 5-10 essential factors
+- Automated factor testing
+- Performance ranking system
+- Factor importance analysis
+
+#### Phase 3: Advanced Integration (Future) 🚀
+- ML-powered factor discovery
+- Real-time factor optimization
+- Market regime adaptation
+- Advanced combination algorithms
+
+#### Phase 4: Production Optimization (Final) 💎
+- Ultra-low latency factor evaluation
+- Distributed factor testing
+- Cloud-based factor laboratory
+- Institutional-grade factor library
+
+### Success Metrics & Validation
+
+#### Factor Performance Criteria 📊
+- **Statistical Significance**: Factor must improve win rate with >95% confidence
+- **Sharpe Ratio Improvement**: Minimum 10% improvement in risk-adjusted returns
+- **Drawdown Reduction**: Maximum drawdown should not increase
+- **Market Regime Robustness**: Factor must work across different market conditions
+- **Implementation Cost**: Factor computation time must be <1ms per evaluation
+
+#### Quality Assurance Standards 🛡️
+- **Overfitting Protection**: Out-of-sample testing mandatory
+- **Survivorship Bias**: Test factors on delisted/failed instruments
+- **Look-Ahead Bias**: Strict temporal data isolation
+- **Data Snooping**: Multiple testing correction applied
+- **Regime Testing**: Validation across bull/bear/sideways markets
+
+---
 
 1. ✅ **STRATEGY REQUIREMENTS COMPLETE** 
 2. 🔄 **CURRENT**: Implement automated trading engine with web dashboard
@@ -244,10 +492,12 @@ dominant_swing:
 - [x] Round 2: Fibonacci Application - **COMPLETED** ✅ 
 - [x] Round 3: Trade Management - **COMPLETED** ✅
 - [x] Round 4: Filters & Context - **COMPLETED** ✅
+- [x] Round 5: Confluence Factor Architecture - **COMPLETED** ✅ NEW
 - [x] **STRATEGY REQUIREMENTS COMPLETE** 🎉
 - [x] AI Enhancement & Automation Features - **ADDED** 🤖
 - [ ] Configuration Parameters - Ready to populate
 - [x] Implementation Specifications - **READY TO BEGIN** ⚡
+- [x] Extensible Signal System - **FULLY SPECIFIED** 🔧
 
 ---
 

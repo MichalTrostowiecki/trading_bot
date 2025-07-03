@@ -37,8 +37,20 @@ class Fractal:
 
 @dataclass
 class FractalDetectionConfig:
-    """Configuration for fractal detection."""
-    periods: int = 5  # Number of bars to check on each side
+    """
+    Configuration for fractal detection.
+    
+    Fractal Detection Logic:
+    - A fractal high requires the high to be greater than N bars before AND N bars after
+    - A fractal low requires the low to be less than N bars before AND N bars after
+    - This creates a (2N+1) bar pattern with N-bar confirmation delay
+    
+    Examples:
+    - periods=3: 7-bar pattern, fractal appears 3 bars after actual high/low
+    - periods=5: 11-bar pattern, fractal appears 5 bars after actual high/low  
+    - periods=11: 23-bar pattern, fractal appears 11 bars after actual high/low
+    """
+    periods: int = 5  # Number of bars to check on each side (creates N-bar detection delay)
     min_strength_pips: float = 0.0  # Minimum fractal strength in pips
     handle_equal_prices: bool = True  # Handle same high/low edge cases
     require_closes_beyond: bool = False  # Require closes beyond fractal level
