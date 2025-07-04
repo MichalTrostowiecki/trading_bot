@@ -773,6 +773,20 @@ async def get_research_dashboard():
             let lastVisibleRange = null;
             let programmaticChange = false;
             
+            // Get bar duration in seconds based on timeframe
+            function getBarDurationInSeconds(timeframe) {
+                switch(timeframe) {
+                    case 'M1': return 60;      // 1 minute
+                    case 'M5': return 300;     // 5 minutes  
+                    case 'M15': return 900;    // 15 minutes
+                    case 'M30': return 1800;   // 30 minutes
+                    case 'H1': return 3600;    // 1 hour
+                    case 'H4': return 14400;   // 4 hours
+                    case 'D1': return 86400;   // 1 day
+                    default: return 60;        // Default to M1
+                }
+            }
+
             // Initialize WebSocket connection
             function initWebSocket() {
                 try {
@@ -1176,7 +1190,15 @@ async def get_research_dashboard():
                     }
                     
                     // 🚨 PERFORMANCE FIX: Check if swing data has actually changed before clearing/redrawing
-                    const currentSwingSignature = swings.map(s => `${s.direction}-${s.start_fractal.timestamp}-${s.end_fractal.timestamp}-${s.is_dominant}`).join('|');
+                    const currentSwingSignature = swings.map(s => {
+                        // Handle cases where fractals might be missing
+                        if (!s || !s.start_fractal || !s.end_fractal) {
+                            console.warn('⚠️ Invalid swing data:', s);
+                            return 'invalid';
+                        }
+                        return `${s.direction}-${s.start_fractal.timestamp}-${s.end_fractal.timestamp}-${s.is_dominant}`;
+                    }).join('|');
+                    
                     if (this._lastSwingSignature === currentSwingSignature) {
                         // Swing data unchanged, skipping redraw
                         return;
@@ -1390,10 +1412,22 @@ async def get_research_dashboard():
                     this.clearFibonacci();
 
                     if (!fibonacciLevels || fibonacciLevels.length === 0 || !dominantSwing) return;
+                    
+                    // Validate dominant swing data
+                    if (!dominantSwing.start_timestamp || !dominantSwing.end_timestamp) {
+                        console.warn('⚠️ Invalid dominant swing timestamps:', dominantSwing);
+                        return;
+                    }
 
                     // Get chart time range for horizontal lines
                     const swingStartTime = new Date(dominantSwing.start_timestamp).getTime() / 1000;
                     const swingEndTime = new Date(dominantSwing.end_timestamp).getTime() / 1000;
+                    
+                    // Validate times
+                    if (isNaN(swingStartTime) || isNaN(swingEndTime)) {
+                        console.warn('⚠️ Invalid swing times:', { swingStartTime, swingEndTime });
+                        return;
+                    }
 
                     // Extend lines beyond the swing for better visibility
                     const timeRange = swingEndTime - swingStartTime;
@@ -1408,6 +1442,17 @@ async def get_research_dashboard():
 
                 addFibonacciLine(fibLevel, startTime, endTime) {
                     try {
+                        // Validate inputs to prevent null errors
+                        if (!fibLevel || !fibLevel.price || isNaN(fibLevel.price)) {
+                            console.warn('⚠️ Invalid Fibonacci level:', fibLevel);
+                            return;
+                        }
+                        
+                        if (!startTime || !endTime || isNaN(startTime) || isNaN(endTime)) {
+                            console.warn('⚠️ Invalid time range for Fibonacci:', { startTime, endTime });
+                            return;
+                        }
+                        
                         const levelPercentage = (fibLevel.level * 100).toFixed(1);
                         const color = this.fibonacciColors[fibLevel.level] || '#ffffff';
 
@@ -1877,12 +1922,23 @@ async def get_research_dashboard():
                     // Data ready for progressive loading
                 }
 
+                // ✅ CHART POSITION VALIDATION: Ensure lastChartPosition is properly initialized
+                if (window.lastChartPosition === undefined || window.lastChartPosition === null) {
+                    window.lastChartPosition = -1; // Initialize to safe value
+                }
+                
+                // ✅ BOUNDS CHECK: Prevent invalid chart position
+                if (window.lastChartPosition < 0 || window.lastChartPosition >= marketData.length) {
+                    console.warn('🔧 Resetting invalid lastChartPosition:', window.lastChartPosition);
+                    window.lastChartPosition = -1;
+                }
+                
                 // Progressive approach: Update chart incrementally to avoid jumps
-                if (!window.lastChartPosition || window.lastChartPosition > dataPosition) {
+                if (window.lastChartPosition === -1 || window.lastChartPosition > dataPosition) {
                     // Reset needed (first time or going backwards)
                     const progressiveData = window.fullChartData.slice(0, dataPosition + 1);
                     candlestickSeries.setData(progressiveData);
-                    // Chart reset
+                    console.log(`📊 Chart reset: showing ${progressiveData.length} bars up to position ${dataPosition}`);
                 } else if (window.lastChartPosition < dataPosition) {
                     // Add new bars incrementally to avoid jumping
                     for (let i = window.lastChartPosition + 1; i <= dataPosition; i++) {
@@ -1926,11 +1982,6 @@ async def get_research_dashboard():
                         chart.timeScale().setVisibleRange({ from: startTime, to: endTime });
                         userHasManuallyPanned = false;
                         
-                        // TradingView optimized view
-                            startDate: new Date(startTime * 1000).toISOString().split('T')[0],
-                            endDate: new Date(endTime * 1000).toISOString().split('T')[0],
-                            showingBars: barsToShow
-                        });
                     } else if (!userHasManuallyPanned && currentRange && position > 0) {
                         // Auto-scroll only if user hasn't manually panned and we're not at start
                         // Only scroll if current position is completely outside visible range
@@ -1948,10 +1999,15 @@ async def get_research_dashboard():
                     } else if (userHasManuallyPanned && currentRange) {
                         // User has manually positioned chart - preserve their view
                         // Only scroll if current position is way outside their view
-                        if (currentTime > currentRange.to + (30 * 60) || currentTime < currentRange.from - (30 * 60)) {
+                        const timeframe = document.getElementById('timeframeSelect').value || 'M1';
+                        const barDuration = getBarDurationInSeconds(timeframe);
+                        const scrollThreshold = barDuration * 30; // 30 bars worth of time
+                        const adjustmentStep = barDuration * 15;   // 15 bars worth of time
+                        
+                        if (currentTime > currentRange.to + scrollThreshold || currentTime < currentRange.from - scrollThreshold) {
                             // Current position is way outside - gently adjust to show it
                             if (window.setProgrammaticRange) {
-                                const adjustment = currentTime > currentRange.to ? (15 * 60) : -(15 * 60);
+                                const adjustment = currentTime > currentRange.to ? adjustmentStep : -adjustmentStep;
                                 window.setProgrammaticRange(
                                     currentRange.from + adjustment,
                                     currentRange.to + adjustment
@@ -1995,6 +2051,7 @@ async def get_research_dashboard():
                 // Debug: Check marker positions after setting
                 setTimeout(() => {
                     // Verifying fractal positions
+                    console.log({
                         totalMarkers: allMarkers.length,
                         sampleMarkers: allMarkers.slice(0, 5).map(m => ({
                             time: m.time,
@@ -2523,20 +2580,11 @@ async def get_research_dashboard():
                         }
                         if (marketData[window.userEndOffset]) {
                         }
+                        
+                        } // Close the if (marketData.length > 0) block
 
-                        // ✅ LOAD BACKTESTING ENGINE - Added at known working point
-                        console.log('🔄 Loading backtesting engine NOW...');
-                        try {
-                            const backtestSuccess = await loadBacktestingEngine(symbol, timeframe, startDate, endDate);
-                            if (backtestSuccess) {
-                                // Backtesting engine loaded
-                            } else {
-                                console.log('❌ Backtesting engine failed to load');
-                            }
-                        } catch (error) {
-                            console.error('❌ Backtesting engine load error:', error);
-                        }
-
+                        // ✅ OPTIMIZED: Single backtesting engine load (removed redundant calls)
+                        console.log('🔄 Loading backtesting engine (optimized)...');
 
                         // Hide welcome message and show chart
                         hideWelcomeMessage();
@@ -2555,50 +2603,50 @@ async def get_research_dashboard():
                         allMarkers = [];
                         
                         
-                        // FORCE backtesting engine to load data for fractal detection
-                        await loadBacktestingEngine(symbol, timeframe, startDate, endDate);
-                        
-                        // Load data into backtesting engine for interactive analysis
+                        // ✅ OPTIMIZED: Single efficient backend load
                         const fractalPeriods = parseInt(document.getElementById('fractalPeriods').value) || 5;
                         const lookbackCandles = parseInt(document.getElementById('lookbackCandles').value) || 140;
-                        console.log('🔄 Loading data into backtesting engine...', {symbol, timeframe, startDate, endDate, fractalPeriods, lookbackCandles});
-                        const backtestResponse = await fetch('/api/backtest/load', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                symbol: symbol,
-                                timeframe: timeframe,
-                                start_date: startDate,
-                                end_date: endDate,
-                                limit: null,
-                                fractal_periods: fractalPeriods,
-                                lookback_candles: lookbackCandles
-                            })
-                        });
+                        console.log('🔄 Loading backtesting engine (single call)...', {symbol, timeframe, startDate, endDate, fractalPeriods, lookbackCandles});
                         
-                        if (!backtestResponse.ok) {
-                            console.error('❌ Backtest load request failed:', backtestResponse.status, backtestResponse.statusText);
-                            return;
+                        try {
+                            const backtestSuccess = await loadBacktestingEngine(symbol, timeframe, startDate, endDate);
+                            if (backtestSuccess) {
+                                console.log('✅ Backtesting engine loaded successfully');
+                            } else {
+                                console.log('❌ Backtesting engine failed to load');
+                            }
+                        } catch (error) {
+                            console.error('❌ Backtesting engine load error:', error);
                         }
                         
-                        const backtestResult = await backtestResponse.json();
-                        console.log('📊 Backtest load response:', backtestResult);
-                        if (backtestResult.success) {
-                            // Backtesting engine loaded
-                        } else {
-                            console.warn('⚠️ Failed to load backtesting engine:', backtestResult.message);
-                        }
-                        
-                        // Synchronize backend to the correct start position
+                        // ✅ OPTIMIZED: Fast initialization without expensive analyze-all
                         try {
                             // Use relative position for backend sync (backend has filtered dataset)
                             const relativePosition = currentPosition; // Backend uses 0-based index within the filtered date range
                             await fetch(`/api/backtest/jump/${relativePosition}`, { method: 'POST' });
 
-                            // Run background analysis to detect fractals
-                            const analysisResponse = await fetch('/api/backtest/analyze-all', { method: 'POST' });
-                            const analysisResult = await analysisResponse.json();
-                            if (analysisResult.success) {
+                            // ✅ PERFORMANCE FIX: Load fractals efficiently without processing all bars
+                            console.log('🔄 Loading fractals efficiently...');
+                            const fractalsResponse = await fetch(`/api/fractals?symbol=${symbol}&timeframe=${timeframe}&start_date=${startDate}&end_date=${endDate}&periods=${fractalPeriods}`);
+                            if (fractalsResponse.ok) {
+                                const fractalsResult = await fractalsResponse.json();
+                                if (fractalsResult.success) {
+                                    console.log(`📍 Loaded ${fractalsResult.fractals?.length || 0} fractals from database`);
+                                    
+                                    if (fractalsResult.fractals && fractalsResult.fractals.length > 0) {
+                                        // Load fractals to chart
+                                        loadAllFractalsToChart(fractalsResult.fractals);
+                                        updateAllMarkers();
+                                    } else {
+                                        // No fractals in database - skip processing for fast loading
+                                        console.log('📍 No fractals in database - will detect them during navigation');
+                                        // Don't process all bars - fractals will be detected as user navigates
+                                    }
+                                }
+                            }
+                            
+                            // Skip expensive analyze-all operation - fractals loaded above
+                            if (false) { // Disabled expensive operation
                                 console.log(`✅ Background analysis complete: ${analysisResult.fractals_detected || 0} fractals detected`);
                                 // Load all detected elements for display
                                 loadAllStrategyElements();
@@ -2857,9 +2905,37 @@ async def get_research_dashboard():
                     
                     // Debug: Log current position and data
                     const dataPosition = window.userStartOffset + currentPosition;
-                    if (marketData[dataPosition]) {
+                    
+                    // ✅ POSITION VALIDATION: Detect unexpected jumps
+                    if (window.lastKnownPosition !== undefined) {
+                        const expectedPosition = window.lastKnownPosition + (action === 'next' ? 1 : action === 'prev' ? -1 : 0);
+                        if (action === 'first') expectedPosition = 0;
+                        if (action === 'last') expectedPosition = maxUserPosition;
+                        
+                        if (Math.abs(currentPosition - expectedPosition) > 1 && action !== 'first' && action !== 'last') {
+                            console.warn('🚨 Unexpected position jump detected!', {
+                                action: action,
+                                expected: expectedPosition,
+                                actual: currentPosition,
+                                jump: currentPosition - expectedPosition,
+                                timestamp: marketData[dataPosition]?.timestamp
+                            });
+                        }
                     }
-                    if (marketData[dataPosition - 1] && action === 'next') {
+                    window.lastKnownPosition = currentPosition;
+                    
+                    // ✅ JUNE 2025 DEBUGGING: Log navigation around June 2025
+                    if (marketData[dataPosition]) {
+                        const timestamp = new Date(marketData[dataPosition].timestamp);
+                        if (timestamp.getFullYear() === 2025 && timestamp.getMonth() === 5) { // June is month 5
+                            console.log('📅 June 2025 navigation:', {
+                                action: action,
+                                position: currentPosition,
+                                dataPosition: dataPosition,
+                                timestamp: marketData[dataPosition].timestamp,
+                                date: timestamp.toLocaleString()
+                            });
+                        }
                     }
 
                     // Update chart progressively to show only bars up to current position
@@ -3276,6 +3352,7 @@ async def get_research_dashboard():
                 chartTooltip.style.display = 'block';
                 
                 // Debug logging (remove in production)
+                console.log({
                     time: time.toLocaleString(),
                     data: dataPoint,
                     position: { x, y }
@@ -3387,6 +3464,7 @@ async def get_research_dashboard():
                     trendLine.setData(lineData);
                     trendLines.push(trendLine);
                     
+                } catch (error) {
                     console.error('Error creating trend line:', error);
                     updateStatus('Error creating trend line');
                 }
