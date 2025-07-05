@@ -906,36 +906,48 @@ class FibonacciStrategy:
     
     def detect_abc_patterns(self, df: pd.DataFrame, current_index: int) -> List[ABCPattern]:
         """
-        Detect ABC correction patterns using fractals and price action.
+        Detect ABC correction patterns within the dominant swing structure.
         
-        Logic:
-        1. Find recent fractals that could form ABC pattern
-        2. Validate Wave A (against trend move)
-        3. Validate Wave B (retracement 38.2%-61.8% of Wave A)
-        4. Detect Wave C completion (100%/61.8%/161.8% of Wave A)
+        Improved Logic:
+        1. Only look for ABC patterns when we have a dominant swing (main trend)
+        2. Find ABC corrections that are retracements/pullbacks within that dominant swing
+        3. Wave A starts from dominant swing and moves against the trend
+        4. Wave B retraces 38.2%-61.8% of Wave A
+        5. Wave C continues in Wave A direction (completing the correction)
+        6. Entire ABC pattern should fit within dominant swing timeframe
         """
         abc_patterns = []
         
-        if len(self.fractals) < 3:  # Need at least 3 fractals for ABC
+        # Must have a dominant swing to find meaningful ABC corrections
+        if not self.current_dominant_swing:
             return abc_patterns
         
-        # Look at recent fractals within lookback window
-        recent_fractals = [f for f in self.fractals if current_index - f.bar_index <= self.lookback_candles]
-        
-        if len(recent_fractals) < 3:
+        if len(self.fractals) < 3:
             return abc_patterns
         
-        # Try different combinations of 3 fractals for ABC patterns
-        for i in range(len(recent_fractals) - 2):
-            fractal_a = recent_fractals[i]      # Start of Wave A
-            fractal_b = recent_fractals[i + 1]  # End of Wave A, start of Wave B
-            fractal_c = recent_fractals[i + 2]  # End of Wave B, start of Wave C
+        # Get fractals that occur within the dominant swing timeframe
+        swing_start_index = self.current_dominant_swing.start_fractal.bar_index
+        swing_end_index = self.current_dominant_swing.end_fractal.bar_index
+        
+        # Find fractals within the dominant swing period
+        swing_fractals = [f for f in self.fractals 
+                         if swing_start_index <= f.bar_index <= current_index]
+        
+        if len(swing_fractals) < 3:
+            return abc_patterns
+        
+        # Look for ABC corrections within the dominant swing
+        # ABC should represent a counter-trend correction within the main trend
+        for i in range(len(swing_fractals) - 2):
+            fractal_a = swing_fractals[i]      # Start of correction (from dominant swing)
+            fractal_b = swing_fractals[i + 1]  # Peak of correction counter-move
+            fractal_c = swing_fractals[i + 2]  # End of Wave B, start of Wave C
             
             # Current price for Wave C completion check
             current_price = df.iloc[current_index]['close']
             current_timestamp = df.index[current_index]
             
-            abc_pattern = self._validate_abc_pattern(
+            abc_pattern = self._validate_abc_pattern_within_swing(
                 fractal_a, fractal_b, fractal_c, 
                 current_price, current_timestamp, current_index
             )
@@ -945,9 +957,9 @@ class FibonacciStrategy:
         
         return abc_patterns
 
-    def _validate_abc_pattern(self, fractal_a: Fractal, fractal_b: Fractal, fractal_c: Fractal,
+    def _validate_abc_pattern_within_swing(self, fractal_a: Fractal, fractal_b: Fractal, fractal_c: Fractal,
                             current_price: float, current_timestamp: pd.Timestamp, current_index: int) -> Optional[ABCPattern]:
-        """Validate if three fractals form a valid ABC correction pattern."""
+        """Validate if three fractals form a valid ABC correction pattern within the dominant swing structure."""
         
         # Step 1: Create Wave A
         wave_a = ABCWave(
@@ -973,16 +985,21 @@ class FibonacciStrategy:
             bars=fractal_c.bar_index - fractal_b.bar_index
         )
         
-        # Step 3: Validate Wave B retracement (must be 38.2%-61.8% of Wave A)
+        # Step 3: CRITICAL - Wave A must move AGAINST the dominant swing direction (correction)
+        dominant_swing_direction = self.current_dominant_swing.direction
+        if wave_a.direction == dominant_swing_direction:
+            return None  # Wave A should be a correction, not continuation
+        
+        # Step 4: Validate Wave B retracement (must be 38.2%-61.8% of Wave A)
         wave_b_retracement = wave_b.points / wave_a.points
         if not (0.382 <= wave_b_retracement <= 0.618):
             return None
         
-        # Step 4: Wave B must move opposite to Wave A (correction)
+        # Step 5: Wave B must move opposite to Wave A (correction of the correction)
         if wave_a.direction == wave_b.direction:
             return None
         
-        # Step 5: Create Wave C (from fractal_c to current price)
+        # Step 6: Create Wave C (from fractal_c to current price)
         wave_c = ABCWave(
             start_timestamp=fractal_c.timestamp,
             end_timestamp=current_timestamp,
@@ -994,21 +1011,34 @@ class FibonacciStrategy:
             bars=current_index - fractal_c.bar_index
         )
         
-        # Step 6: Wave C must move same direction as Wave A (continuation of correction)
+        # Step 7: Wave C must move same direction as Wave A (continuation of correction)
         if wave_a.direction != wave_c.direction:
             return None
         
-        # Step 7: Check Wave C completion ratios (100%, 61.8%, or 161.8% of Wave A)
+        # Step 8: Wave C should not exceed dominant swing bounds significantly (remain a correction)
+        dominant_swing_start = self.current_dominant_swing.start_fractal.price
+        dominant_swing_end = self.current_dominant_swing.end_fractal.price
+        
+        if dominant_swing_direction == 'up':
+            # For uptrend: correction shouldn't go below dominant swing start
+            if current_price < dominant_swing_start * 0.95:  # 5% tolerance
+                return None
+        else:
+            # For downtrend: correction shouldn't go above dominant swing start  
+            if current_price > dominant_swing_start * 1.05:  # 5% tolerance
+                return None
+        
+        # Step 9: Check Wave C completion ratios (100%, 61.8%, or 161.8% of Wave A)
         wave_c_ratio = wave_c.points / wave_a.points
         valid_ratios = [0.618, 1.0, 1.618]  # 61.8%, 100%, 161.8%
         tolerance = 0.1  # 10% tolerance
         
         is_complete = any(abs(wave_c_ratio - ratio) <= tolerance for ratio in valid_ratios)
         
-        # Step 8: Determine pattern type (simplified)
+        # Step 10: Determine pattern type (simplified)
         pattern_type = 'zigzag'  # Default to zigzag for now
         
-        # Step 9: Check for Fibonacci confluence
+        # Step 11: Check for Fibonacci confluence
         fibonacci_confluence = None
         if hasattr(self, 'current_dominant_swing') and self.current_dominant_swing:
             fib_levels = self.calculate_fibonacci_levels(self.current_dominant_swing)
