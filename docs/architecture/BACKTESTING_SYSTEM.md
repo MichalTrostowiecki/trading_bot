@@ -146,6 +146,7 @@ Create research dashboard at http://localhost:8001:
    - Fractals with proper symbols (▲ for lows, ▼ for highs)
    - Swing highs/lows with directional arrows
    - Fibonacci levels (23.6%, 38.2%, 50%, 61.8%, 78.6%)
+   - ABC correction patterns with dotted wave lines
    - Entry/exit signals with labels
    - Stop loss/take profit lines
 

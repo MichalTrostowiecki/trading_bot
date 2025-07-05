@@ -21,6 +21,7 @@ The system identifies major market swings using fractal analysis and applies Fib
 The strategy is based on Elliott Wave concepts, specifically:
 - **Dominant Swing = Impulsive Move (potentially Wave 3)**
 - **Fibonacci Retracements = Wave 4 correction levels**
+- **ABC Corrections = Internal wave structure analysis within dominant swings**
 - **Entry = Wave 5 continuation in direction of dominant swing**
 
 ### Questions and Answers
@@ -248,6 +249,54 @@ dominant_swing:
 - [x] AI Enhancement & Automation Features - **ADDED** 🤖
 - [ ] Configuration Parameters - Ready to populate
 - [x] Implementation Specifications - **READY TO BEGIN** ⚡
+
+---
+
+## ABC Correction Patterns ✅ COMPLETED
+
+### Overview
+Elliott Wave compliant ABC correction pattern detection provides additional market structure analysis within dominant swing contexts.
+
+### ABC Pattern Requirements
+1. **Context Dependency**: ABC patterns only detected within established dominant swings
+2. **Elliott Wave Compliance**: Strict adherence to professional Elliott Wave theory
+3. **Pattern Validation**: Multi-step validation ensuring high-quality patterns only
+
+### ABC Pattern Rules
+1. **Wave A (Correction Start)**:
+   - Must move AGAINST the dominant swing direction
+   - Represents initial correction against main trend
+   - Uses actual fractal points for precision
+
+2. **Wave B (Retracement)**:
+   - Must retrace 38.2%-61.8% of Wave A (Elliott Wave standard)
+   - Moves opposite direction to Wave A
+   - Validates correction structure
+
+3. **Wave C (Correction Completion)**:
+   - Continues in Wave A direction (completing correction)
+   - Targets 61.8%, 100%, or 161.8% extension of Wave A
+   - Must stay within dominant swing boundaries
+
+### Visual Implementation
+- **Red Dotted Lines**: Wave A visualization
+- **Teal Dotted Lines**: Wave B visualization  
+- **Blue Dotted Lines**: Wave C visualization
+- **Pattern Labels**: A, B, C markers at wave endpoints
+- **Real-time Updates**: Patterns appear during chart replay
+
+### Integration Points
+- **Fibonacci Confluence**: ABC completion points checked against Fibonacci levels
+- **Swing Structure**: Works within existing dominant swing framework
+- **Chart Controls**: Toggle visibility via settings panel
+- **Debug Information**: Pattern count displayed in debug panel
+
+### Implementation Status
+- [x] Backend detection logic with Elliott Wave validation
+- [x] Frontend visualization with dotted line display
+- [x] UI controls and settings integration
+- [x] Real-time pattern updates and accumulation
+- [x] Documentation and user guide updates
 
 ---
 

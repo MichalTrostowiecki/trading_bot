@@ -98,6 +98,7 @@ python3 test_backtesting_db.py
    - Toggle fractals display
    - Toggle swings display
    - Toggle Fibonacci levels
+   - Toggle ABC patterns display
    - Toggle signals display
 
 ## 🔌 API Endpoints
@@ -132,6 +133,44 @@ curl -X POST http://localhost:8001/api/backtest \
 # Get fractals
 curl "http://localhost:8001/api/fractals?symbol=EURUSD&timeframe=H1&start_date=2024-01-01&end_date=2024-01-02"
 ```
+
+## 🌊 ABC Pattern Analysis
+
+### Overview
+The dashboard includes Elliott Wave compliant ABC correction pattern detection, providing professional market structure analysis within dominant swing contexts.
+
+### ABC Pattern Features
+- **Elliott Wave Compliance**: Follows professional Elliott Wave theory rules
+- **Dominant Swing Context**: ABC patterns only detected within established dominant swings
+- **Real-time Detection**: Live pattern identification during chart replay
+- **Visual Feedback**: Dotted line visualization showing wave connections
+- **Pattern Validation**: Strict validation rules ensuring high-quality patterns
+
+### ABC Pattern Rules
+1. **Wave A**: Must move AGAINST the dominant swing direction (correction start)
+2. **Wave B**: Retraces 38.2%-61.8% of Wave A (Elliott Wave standard)
+3. **Wave C**: Continues Wave A direction, completing the correction
+4. **Boundary Validation**: Pattern must stay within dominant swing bounds
+5. **Completion Ratios**: Wave C targets 61.8%, 100%, or 161.8% of Wave A
+
+### Visual Elements
+- **Red Dotted Line**: Wave A (correction against trend)
+- **Teal Dotted Line**: Wave B (retracement of correction)
+- **Blue Dotted Line**: Wave C (completion of correction)
+- **Pattern Labels**: A, B, C markers at wave endpoints
+- **Debug Counter**: Real-time pattern count in debug panel
+
+### Controls
+- **ABC Checkbox**: Toggle ABC pattern visibility in settings panel
+- **Real-time Updates**: Patterns appear immediately when detected
+- **Chart Integration**: Works alongside fractals, swings, and Fibonacci levels
+
+### Usage
+1. Enable ABC patterns checkbox in settings panel
+2. Navigate through chart replay to see patterns develop
+3. Monitor debug panel for pattern count updates
+4. Observe dotted lines showing wave structure
+5. Use patterns for confluence analysis with Fibonacci levels
 
 ## 📈 Data Import
 
@@ -200,6 +239,7 @@ Backtest Runs API    ✅ PASS
 - **Real-time Fractals**: Live fractal detection and display
 - **Swing Analysis**: Advanced swing pattern recognition
 - **Fibonacci Visualization**: Interactive Fibonacci level drawing
+- **ABC Pattern Detection**: Elliott Wave compliant ABC correction patterns
 - **Signal Optimization**: ML-enhanced signal generation
 
 ## 📁 File Structure

@@ -5,6 +5,30 @@ All notable changes to the Fibonacci Trading Bot project will be documented in t
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2025-07-05
+
+### Added
+- **ABC Correction Pattern System**: Complete Elliott Wave compliant ABC pattern detection and visualization
+- Elliott Wave theory validation with strict pattern rules (Wave B: 38.2%-61.8% retracement, Wave C: 61.8%/100%/161.8% completion)
+- Dominant swing context detection - ABC patterns only appear within established dominant swings
+- Professional dotted line visualization (Red: Wave A, Teal: Wave B, Blue: Wave C)
+- Real-time ABC pattern count in debug panel with live updates
+- ABC patterns toggle checkbox in settings panel
+- Pattern boundary validation ensuring corrections stay within swing limits
+- Fibonacci confluence detection at ABC completion points
+
+### Fixed
+- Duplicate JavaScript class declarations causing "identifier already declared" errors
+- ABC checkbox ID conflicts and method name mismatches
+- JavaScript UI integration issues preventing pattern display
+- Visual feedback improvements for ABC pattern detection
+
+### Technical
+- ABCWave and ABCPattern dataclasses for structured pattern representation
+- Enhanced fibonacci_strategy.py with detect_abc_patterns() and validation methods
+- ABCPatternManager class for TradingView chart integration
+- Comprehensive documentation updates across user guides and architecture specs
+
 ## [2.6.0] - 2025-07-01
 
 ### Added
