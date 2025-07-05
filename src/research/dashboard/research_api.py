@@ -623,6 +623,10 @@ async def get_research_dashboard():
                             <span class="metric-value" id="signalCount">0</span>
                         </div>
                         <div class="metric">
+                            <span class="metric-label">ABC Patterns:</span>
+                            <span class="metric-value" id="abcPatternCount">0</span>
+                        </div>
+                        <div class="metric">
                             <span class="metric-label">Current Strategy:</span>
                             <span class="metric-value" id="currentStrategy">Fibonacci</span>
                         </div>
@@ -661,10 +665,6 @@ async def get_research_dashboard():
                         <div class="metric">
                             <span class="metric-label">Show Fibonacci:</span>
                             <input type="checkbox" id="showFibonacci" checked onchange="refreshChartElements()">
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Show ABC Patterns:</span>
-                            <input type="checkbox" id="showABCPatterns" onchange="refreshChartElements()">
                         </div>
                         <div class="metric">
                             <span class="metric-label">Fractal Periods:</span>
@@ -1498,11 +1498,11 @@ async def get_research_dashboard():
                     this.abcLines = [];
                     this.abcLabels = [];
                     
-                    // ABC wave styling
+                    // ABC wave styling - dotted lines to show wave connections
                     this.waveStyles = {
-                        A: { color: '#FF6B6B', width: 2, style: 0 }, // Solid red
-                        B: { color: '#4ECDC4', width: 2, style: 0 }, // Solid teal
-                        C: { color: '#45B7D1', width: 2, style: 0 }  // Solid blue
+                        A: { color: '#FF6B6B', width: 2, style: 2 }, // Dotted red (A to B)
+                        B: { color: '#4ECDC4', width: 2, style: 2 }, // Dotted teal (B to C) 
+                        C: { color: '#45B7D1', width: 2, style: 2 }  // Dotted blue (C continuation)
                     };
                     
                     console.log('📊 ABCPatternManager initialized');
@@ -1714,17 +1714,17 @@ async def get_research_dashboard():
                     console.log('🌊 ABC Pattern check:', {
                         'has_abc_patterns': !!(results.abc_patterns && results.abc_patterns.length > 0),
                         'abc_patterns_count': results.abc_patterns ? results.abc_patterns.length : 0,
-                        'checkbox_checked': document.getElementById('showABCPatterns') ? document.getElementById('showABCPatterns').checked : false,
+                        'checkbox_checked': document.getElementById('showABC') ? document.getElementById('showABC').checked : false,
                         'abc_patterns_data': results.abc_patterns
                     });
                     
                     if (results.abc_patterns && results.abc_patterns.length > 0) {
                         accumulatedABCPatterns = results.abc_patterns;
                         
-                        if (document.getElementById('showABCPatterns') && document.getElementById('showABCPatterns').checked) {
-                            console.log('✅ Calling abcPatternManager.displayABCPatterns with', results.abc_patterns.length, 'patterns');
+                        if (document.getElementById('showABC') && document.getElementById('showABC').checked) {
+                            console.log('✅ Calling abcPatternManager.loadAllABCPatterns with', results.abc_patterns.length, 'patterns');
                             if (abcPatternManager) {
-                                abcPatternManager.displayABCPatterns(results.abc_patterns);
+                                abcPatternManager.loadAllABCPatterns(results.abc_patterns);
                             }
                         }
                     }
@@ -1751,6 +1751,7 @@ async def get_research_dashboard():
                     document.getElementById('fractalCount').textContent = results.total_fractals || 0;
                     document.getElementById('swingCount').textContent = results.total_swings || 0;
                     document.getElementById('signalCount').textContent = results.total_signals || 0;
+                    document.getElementById('abcPatternCount').textContent = results.total_abc_patterns || 0;
                     
                     // Update market bias display
                     if (results.market_bias) {
@@ -2334,7 +2335,7 @@ async def get_research_dashboard():
                     }
 
                     // Handle ABC patterns
-                    if (!document.getElementById('showABCPatterns') || !document.getElementById('showABCPatterns').checked) {
+                    if (!document.getElementById('showABC') || !document.getElementById('showABC').checked) {
                         if (abcPatternManager) {
                             abcPatternManager.clearABCPatterns();
                             console.log('ABC patterns hidden by checkbox');
@@ -2343,7 +2344,7 @@ async def get_research_dashboard():
                         // Load all accumulated ABC patterns using proper pattern management
                         if (accumulatedABCPatterns && accumulatedABCPatterns.length > 0) {
                             if (abcPatternManager) {
-                                abcPatternManager.displayABCPatterns(accumulatedABCPatterns);
+                                abcPatternManager.loadAllABCPatterns(accumulatedABCPatterns);
                                 console.log(`🌊 Showing ${accumulatedABCPatterns.length} ABC patterns`);
                             }
                         } else {
@@ -3195,6 +3196,7 @@ async def get_research_dashboard():
                                 document.getElementById('fractalCount').textContent = results.total_fractals || 0;
                                 document.getElementById('swingCount').textContent = results.total_swings || 0;
                                 document.getElementById('signalCount').textContent = results.total_signals || 0;
+                                document.getElementById('abcPatternCount').textContent = results.total_abc_patterns || 0;
                                 
                                 // Real fractal processing will be handled by the backend strategy results
                                 // No test fractals needed
@@ -3302,6 +3304,7 @@ async def get_research_dashboard():
                                 document.getElementById('fractalCount').textContent = results.total_fractals || 0;
                                 document.getElementById('swingCount').textContent = results.total_swings || 0;
                                 document.getElementById('signalCount').textContent = results.total_signals || 0;
+                                document.getElementById('abcPatternCount').textContent = results.total_abc_patterns || 0;
                                 
                                 // Add visual elements during auto-replay ONLY if checkboxes are checked
                                 if (results.new_fractal) {
