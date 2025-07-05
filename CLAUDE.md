@@ -14,6 +14,7 @@
 - **Architecture**: [`docs/architecture/`](docs/architecture/) - System design, strategy specs, phase plans
   - 🔗 [STRATEGY_REQUIREMENTS.md](docs/architecture/STRATEGY_REQUIREMENTS.md) - **CRITICAL REFERENCE**
   - 🔗 [BACKTESTING_SYSTEM.md](docs/architecture/BACKTESTING_SYSTEM.md) - Phase 3 implementation roadmap
+  - 🔗 [ABC_CORRECTION_PATTERNS.md](docs/architecture/ABC_CORRECTION_PATTERNS.md) - **ABC Pattern Implementation**
   - 🔗 [CORE_STRATEGY_SPECIFICATION.md](docs/architecture/CORE_STRATEGY_SPECIFICATION.md)
 - **API**: [`docs/api/`](docs/api/) - Endpoint specifications, dependencies
   - 🔗 [API_SPECIFICATION.md](docs/api/API_SPECIFICATION.md)
@@ -24,6 +25,7 @@
 - **Development**: [`docs/development/`](docs/development/) - Setup, testing, workflows
   - 🔗 [DATABASE_SETUP.md](docs/development/DATABASE_SETUP.md)
   - 🔗 [GIT_WORKFLOW_GUIDE.md](docs/development/GIT_WORKFLOW_GUIDE.md)
+  - 🔗 [ABC_REIMPLEMENTATION_GUIDE.md](docs/development/ABC_REIMPLEMENTATION_GUIDE.md) - **ABC Re-implementation**
   - 🔗 [TESTING_STRATEGY.md](docs/development/TESTING_STRATEGY.md)
 - **Deployment**: [`docs/deployment/`](docs/deployment/) - Production deployment guides
   - 🔗 [DEPLOYMENT_GUIDE.md](docs/deployment/DEPLOYMENT_GUIDE.md)

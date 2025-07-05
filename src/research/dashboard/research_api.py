@@ -728,7 +728,13 @@ async def get_research_dashboard():
                     script.src = cdnUrls[currentCdn];
                     script.onload = function() {
                         console.log('✅ TradingView charts loaded from:', cdnUrls[currentCdn]);
-                        initializeApp();
+                        console.log('🎯 LightweightCharts available:', typeof LightweightCharts !== 'undefined');
+                        try {
+                            initializeApp();
+                        } catch (error) {
+                            console.error('❌ Error during initializeApp:', error);
+                            updateStatus('Error: Failed to initialize application');
+                        }
                     };
                     script.onerror = function() {
                         console.warn('⚠️ Failed to load from:', cdnUrls[currentCdn]);
@@ -1667,21 +1673,26 @@ async def get_research_dashboard():
             // Initialize TradingView Chart
             function initChart() {
                 try {
+                    console.log('🎯 DEBUG: initChart starting...');
+                    
                     // Check if LightweightCharts is available
                     if (typeof LightweightCharts === 'undefined') {
-                        console.error('TradingView LightweightCharts library not loaded!');
+                        console.error('❌ TradingView LightweightCharts library not loaded!');
                         updateStatus('Error: TradingView library not loaded');
                         return;
                     }
+                    console.log('✅ LightweightCharts library available');
 
                     const chartContainer = document.getElementById('chartDiv');
                     if (!chartContainer) {
-                        console.error('Chart container not found!');
+                        console.error('❌ Chart container not found!');
                         updateStatus('Error: Chart container not found');
                         return;
                     }
+                    console.log('✅ Chart container found:', chartContainer);
 
                     if (chart) {
+                        console.log('🔄 Removing existing chart...');
                         chart.remove();
                     }
                     chart = LightweightCharts.createChart(chartContainer, {
@@ -1720,6 +1731,7 @@ async def get_research_dashboard():
                         exitMode: LightweightCharts.TrackingModeExitMode.OnNextTap,
                     },
                 });
+                console.log('✅ Chart created successfully');
                 
                 // Create candlestick series
                 candlestickSeries = chart.addCandlestickSeries({
@@ -1729,6 +1741,7 @@ async def get_research_dashboard():
                     wickUpColor: '#26a69a',
                     wickDownColor: '#ef5350',
                 });
+                console.log('✅ Candlestick series created');
                 
                 // Create line series for overlays
                 fractalSeries = chart.addLineSeries({
@@ -1836,8 +1849,17 @@ async def get_research_dashboard():
             
             // Update chart with market data (full range - for initial load)
             function updateChart(data) {
+                console.log(`🎯 DEBUG: updateChart called with ${data ? data.length : 0} bars`);
+                
                 if (!chart || !candlestickSeries) {
+                    console.log('🎯 Chart not initialized, calling initChart...');
                     initChart();
+                }
+
+                if (!data || data.length === 0) {
+                    console.error('❌ No data provided to updateChart');
+                    updateStatus('Error: No data to display');
+                    return;
                 }
 
                 // Store full market data for progressive replay
@@ -1850,8 +1872,20 @@ async def get_research_dashboard():
                 accumulatedFractals = []; // Clear accumulated fractals for new data
                 accumulatedSwings = []; // Clear accumulated swings for new data
 
-                // FIXED: Clear full chart data cache to force regeneration
-                window.fullChartData = null;
+                // ✅ FIXED: Generate fullChartData immediately instead of clearing it
+                window.fullChartData = data.map(bar => ({
+                    time: Math.floor(new Date(bar.timestamp).getTime() / 1000),
+                    open: bar.open,
+                    high: bar.high,
+                    low: bar.low,
+                    close: bar.close,
+                    volume: bar.volume || 0
+                }));
+
+                console.log(`🎯 DEBUG: Generated fullChartData with ${window.fullChartData.length} bars`);
+                console.log(`🎯 DEBUG: First bar:`, window.fullChartData[0]);
+                console.log(`🎯 DEBUG: Last bar:`, window.fullChartData[window.fullChartData.length - 1]);
+
                 window.currentBacktestPosition = 0;
 
                 // Clear any existing position indicator
@@ -1872,10 +1906,16 @@ async def get_research_dashboard():
             
             // Progressive chart update for backtesting (shows data up to current position)
             function updateChartProgressive(position) {
-                if (!chart || !candlestickSeries || !marketData) return;
+                console.log(`🎯 DEBUG: updateChartProgressive called with position=${position}, dataLength=${marketData ? marketData.length : 0}`);
+                
+                if (!chart || !candlestickSeries || !marketData) {
+                    console.error('❌ Missing required objects:', { chart: !!chart, candlestickSeries: !!candlestickSeries, marketData: !!marketData });
+                    return;
+                }
 
                 // Convert user position to data array position
                 const dataPosition = (window.userStartOffset || 0) + position;
+                console.log(`🎯 DEBUG: dataPosition=${dataPosition}, userStartOffset=${window.userStartOffset || 0}`);
                 
                 // Ensure we don't go out of bounds
                 if (dataPosition >= marketData.length) {
@@ -1900,6 +1940,7 @@ async def get_research_dashboard():
                 if (!window.lastChartPosition || window.lastChartPosition > dataPosition) {
                     // Reset needed (first time or going backwards)
                     const progressiveData = window.fullChartData.slice(0, dataPosition + 1);
+                    console.log(`🎯 DEBUG: Setting chart data with ${progressiveData.length} bars (position 0 to ${dataPosition})`);
                     candlestickSeries.setData(progressiveData);
                     console.log(`📊 Chart reset: showing ${progressiveData.length}/${window.fullChartData.length} bars (up to position ${dataPosition})`);
                 } else if (window.lastChartPosition < dataPosition) {
@@ -2527,11 +2568,31 @@ async def get_research_dashboard():
                 showLoading(true);
                 
                 try {
-                    // Calculate pre-load start date (load extra data before start date for context)
-                    const userStartDate = new Date(startDate);
-                    const preloadDays = timeframe === 'M1' ? 7 : timeframe === 'H1' ? 30 : 14; // Days to preload
-                    const preloadStartDate = new Date(userStartDate.getTime() - (preloadDays * 24 * 60 * 60 * 1000));
-                    const preloadStartDateStr = preloadStartDate.toISOString().split('T')[0];
+                    // First check available data range to avoid requesting non-existent dates
+                    console.log('🔍 Checking available data range before loading...');
+                    const symbolsResponse = await fetch('/api/symbols');
+                    const symbolsResult = await symbolsResponse.json();
+                    
+                    let actualStartDate = startDate;
+                    if (symbolsResult.success && symbolsResult.symbols) {
+                        const currentSymbol = symbolsResult.symbols.find(s => s.symbol === symbol);
+                        if (currentSymbol) {
+                            const currentTimeframe = currentSymbol.timeframes.find(tf => tf.timeframe === timeframe);
+                            if (currentTimeframe) {
+                                const availableStart = currentTimeframe.start_date.split(' ')[0]; // Extract date part
+                                
+                                // Calculate desired preload start date
+                                const userStartDate = new Date(startDate);
+                                const preloadDays = timeframe === 'M1' ? 7 : timeframe === 'H1' ? 30 : 14;
+                                const preloadStartDate = new Date(userStartDate.getTime() - (preloadDays * 24 * 60 * 60 * 1000));
+                                const preloadStartDateStr = preloadStartDate.toISOString().split('T')[0];
+                                
+                                // Use the later of: available start date or desired preload date
+                                actualStartDate = availableStart > preloadStartDateStr ? availableStart : preloadStartDateStr;
+                                console.log(`📅 Adjusted start date: requested ${preloadStartDateStr}, available from ${availableStart}, using ${actualStartDate}`);
+                            }
+                        }
+                    }
 
                     const response = await fetch('/api/data', {
                         method: 'POST',
@@ -2539,7 +2600,7 @@ async def get_research_dashboard():
                         body: JSON.stringify({
                             symbol: symbol,
                             timeframe: timeframe,
-                            start_date: preloadStartDateStr, // Start earlier for context
+                            start_date: actualStartDate, // Use adjusted start date
                             end_date: endDate,
                             limit: null  // Load all data in extended range
                         })
@@ -2561,6 +2622,7 @@ async def get_research_dashboard():
                         }
 
                         // Find the index where user's selected start date begins
+                        const userStartDate = new Date(startDate);
                         const userStartIndex = marketData.findIndex(bar =>
                             new Date(bar.timestamp).getTime() >= userStartDate.getTime()
                         );
@@ -2624,41 +2686,7 @@ async def get_research_dashboard():
                         // Clear all markers when loading new data
                         allMarkers = [];
                         
-                        console.log('🚨 DEBUG: About to load backtesting engine...');
-                        
-                        // FORCE backtesting engine to load data for fractal detection
-                        await loadBacktestingEngine(symbol, timeframe, startDate, endDate);
-                        
-                        // Load data into backtesting engine for interactive analysis
-                        const fractalPeriods = parseInt(document.getElementById('fractalPeriods').value) || 5;
-                        const lookbackCandles = parseInt(document.getElementById('lookbackCandles').value) || 140;
-                        console.log('🔄 Loading data into backtesting engine...', {symbol, timeframe, startDate, endDate, fractalPeriods, lookbackCandles});
-                        const backtestResponse = await fetch('/api/backtest/load', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                symbol: symbol,
-                                timeframe: timeframe,
-                                start_date: startDate,
-                                end_date: endDate,
-                                limit: null,
-                                fractal_periods: fractalPeriods,
-                                lookback_candles: lookbackCandles
-                            })
-                        });
-                        
-                        if (!backtestResponse.ok) {
-                            console.error('❌ Backtest load request failed:', backtestResponse.status, backtestResponse.statusText);
-                            return;
-                        }
-                        
-                        const backtestResult = await backtestResponse.json();
-                        console.log('📊 Backtest load response:', backtestResult);
-                        if (backtestResult.success) {
-                            console.log('✅ Backtesting engine loaded successfully:', backtestResult.total_bars, 'bars');
-                        } else {
-                            console.warn('⚠️ Failed to load backtesting engine:', backtestResult.message);
-                        }
+                        console.log('✅ Chart updated with market data, backtesting engine loaded successfully');
                         
                         // Synchronize backend to the correct start position
                         try {
@@ -4337,7 +4365,19 @@ async def load_backtest_data(request: DataRequest):
         
         # Create new engine instance with configuration or reconfigure existing one
         global backtesting_engine
-        backtesting_engine = BacktestingEngine(strategy_config=strategy_config)
+        backtesting_engine = BacktestingEngine()
+        
+        # Configure strategy with the provided parameters
+        if hasattr(backtesting_engine.strategy, 'configure'):
+            backtesting_engine.strategy.configure(strategy_config)
+        else:
+            # Update strategy parameters directly
+            if 'fractal_period' in strategy_config:
+                backtesting_engine.strategy.fractal_period = strategy_config['fractal_period']
+            if 'min_swing_points' in strategy_config:
+                backtesting_engine.strategy.min_swing_points = strategy_config['min_swing_points']
+            if 'lookback_candles' in strategy_config:
+                backtesting_engine.strategy.lookback_candles = strategy_config['lookback_candles']
         
         # Load data into backtesting engine
         logger.info(f"🔄 Loading {len(df)} bars into backtesting engine...")
