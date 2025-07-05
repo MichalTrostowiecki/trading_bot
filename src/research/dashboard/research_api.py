@@ -663,6 +663,10 @@ async def get_research_dashboard():
                             <input type="checkbox" id="showFibonacci" checked onchange="refreshChartElements()">
                         </div>
                         <div class="metric">
+                            <span class="metric-label">Show ABC Patterns:</span>
+                            <input type="checkbox" id="showABCPatterns" onchange="refreshChartElements()">
+                        </div>
+                        <div class="metric">
                             <span class="metric-label">Fractal Periods:</span>
                             <input type="number" id="fractalPeriods" min="1" max="50" value="5" onchange="refreshChartElements()" style="width: 60px;" title="Number of bars before AND after the high/low point for fractal validation. Period N = N bars delay after actual turning point.">
                         </div>
@@ -679,6 +683,10 @@ async def get_research_dashboard():
                         <div class="metric">
                             <span class="metric-label">Show Swings:</span>
                             <input type="checkbox" id="showSwings" onchange="refreshChartElements()">
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Show ABC Patterns:</span>
+                            <input type="checkbox" id="showABC" onchange="refreshChartElements()">
                         </div>
                         <div class="metric">
                             <span class="metric-label">Show Fibonacci:</span>
@@ -831,6 +839,7 @@ async def get_research_dashboard():
             let accumulatedFractals = [];
             let accumulatedSwings = [];
             let accumulatedFibonacci = [];
+            let accumulatedABCPatterns = [];
             let accumulatedDominantSwing = null;
             
             // ✅ PROPER TRADINGVIEW MARKER MANAGEMENT
@@ -892,6 +901,187 @@ async def get_research_dashboard():
             
             // Global marker manager instance
             let fractalManager = null;
+            
+            // ABC Pattern Manager Class
+            class ABCPatternManager {
+                constructor(candlestickSeries) {
+                    this.candlestickSeries = candlestickSeries;
+                    this.abcLines = [];
+                    this.abcLabels = [];
+                    
+                    // ABC wave styling
+                    this.waveStyles = {
+                        A: { color: '#FF6B6B', width: 2, style: 0 }, // Solid red
+                        B: { color: '#4ECDC4', width: 2, style: 0 }, // Solid teal
+                        C: { color: '#45B7D1', width: 2, style: 0 }  // Solid blue
+                    };
+                    
+                    console.log('📊 ABCPatternManager initialized');
+                }
+
+                // Main method to display ABC patterns
+                displayABCPatterns(abcPatterns) {
+                    try {
+                        if (!abcPatterns || abcPatterns.length === 0) {
+                            return;
+                        }
+
+                        console.log('🔄 Processing', abcPatterns.length, 'ABC patterns');
+
+                        // Clear existing ABC patterns first
+                        this.clearABCPatterns();
+
+                        // Add each ABC pattern
+                        abcPatterns.forEach((pattern, index) => {
+                            this.addABCPatternToChart(pattern, index);
+                        });
+
+                    } catch (error) {
+                        console.error('❌ Error displaying ABC patterns:', error);
+                    }
+                }
+
+                // Add individual ABC pattern to chart
+                addABCPatternToChart(pattern, index) {
+                    try {
+                        if (!chart || !pattern) return;
+
+                        // Wave A line (fractal A to fractal B)
+                        this.addWaveLine('A', pattern.wave_a, index);
+                        
+                        // Wave B line (fractal B to fractal C)
+                        this.addWaveLine('B', pattern.wave_b, index);
+                        
+                        // Wave C line (fractal C to current position)
+                        this.addWaveLine('C', pattern.wave_c, index);
+
+                        // Add labels for each wave
+                        this.addWaveLabels(pattern, index);
+
+                        console.log('✅ ABC pattern added:', {
+                            index: index,
+                            type: pattern.pattern_type,
+                            complete: pattern.is_complete,
+                            confluence: pattern.fibonacci_confluence
+                        });
+
+                    } catch (error) {
+                        console.error('❌ Error adding ABC pattern to chart:', error);
+                    }
+                }
+
+                // Add line for individual wave
+                addWaveLine(waveType, waveData, patternIndex) {
+                    try {
+                        const style = this.waveStyles[waveType];
+                        
+                        // Convert timestamps to chart time format
+                        const startTime = new Date(waveData.start_timestamp).getTime() / 1000;
+                        const endTime = new Date(waveData.end_timestamp).getTime() / 1000;
+                        
+                        // Validate timestamps
+                        if (isNaN(startTime) || isNaN(endTime)) {
+                            console.warn('⚠️ Invalid timestamps for wave', waveType);
+                            return;
+                        }
+
+                        // Create line data
+                        const lineData = [
+                            { time: startTime, value: waveData.start_price },
+                            { time: endTime, value: waveData.end_price }
+                        ];
+
+                        // Create line series
+                        const lineSeries = chart.addLineSeries({
+                            color: style.color,
+                            lineWidth: style.width,
+                            lineStyle: style.style,
+                            priceLineVisible: false,
+                            lastValueVisible: false,
+                            title: `ABC-${waveType}-${patternIndex}`
+                        });
+
+                        lineSeries.setData(lineData);
+                        this.abcLines.push(lineSeries);
+
+                    } catch (error) {
+                        console.error('❌ Error adding ABC wave line:', error);
+                    }
+                }
+
+                // Add wave labels
+                addWaveLabels(pattern, index) {
+                    try {
+                        // Add labels for A, B, C waves
+                        ['A', 'B', 'C'].forEach(waveType => {
+                            const waveData = pattern[`wave_${waveType.toLowerCase()}`];
+                            const labelTime = new Date(waveData.end_timestamp).getTime() / 1000;
+                            
+                            if (!isNaN(labelTime)) {
+                                const marker = {
+                                    time: labelTime,
+                                    position: 'inBar',
+                                    color: this.waveStyles[waveType].color,
+                                    shape: 'circle',
+                                    text: waveType,
+                                    size: 1
+                                };
+                                
+                                this.abcLabels.push(marker);
+                            }
+                        });
+
+                        // Update markers on chart
+                        this.updateChartMarkers();
+
+                    } catch (error) {
+                        console.error('❌ Error adding ABC wave labels:', error);
+                    }
+                }
+
+                // Update chart markers
+                updateChartMarkers() {
+                    if (this.candlestickSeries && this.abcLabels.length > 0) {
+                        const existingMarkers = this.candlestickSeries.markers() || [];
+                        const allMarkers = [...existingMarkers, ...this.abcLabels];
+                        this.candlestickSeries.setMarkers(allMarkers);
+                    }
+                }
+
+                // Clear all ABC patterns
+                clearABCPatterns() {
+                    try {
+                        // Remove all ABC line series
+                        this.abcLines.forEach(lineSeries => {
+                            if (chart && lineSeries) {
+                                chart.removeSeries(lineSeries);
+                            }
+                        });
+                        this.abcLines = [];
+
+                        // Clear ABC labels
+                        this.abcLabels = [];
+
+                        console.log('🧹 ABC patterns cleared');
+
+                    } catch (error) {
+                        console.error('❌ Error clearing ABC patterns:', error);
+                    }
+                }
+
+                // Load all patterns (for accumulated display)
+                loadAllPatterns(patterns) {
+                    this.displayABCPatterns(patterns);
+                }
+
+                // Clear patterns (alias for clearABCPatterns)
+                clearPatterns() {
+                    this.clearABCPatterns();
+                }
+            }
+            
+            // Global ABC pattern manager instance
+            let abcPatternManager = null;
             let swingLineManager = null;
             let fibonacciManager = null;
             
@@ -1481,6 +1671,122 @@ async def get_research_dashboard():
                 }
             }
 
+            // ✅ ABC PATTERN VISUALIZATION MANAGER
+            class ABCPatternManager {
+                constructor(candlestickSeries) {
+                    this.candlestickSeries = candlestickSeries;
+                    this.abcLines = [];
+                    this.abcLabels = [];
+                    
+                    // ABC wave styling
+                    this.waveStyles = {
+                        A: { color: '#FF6B6B', width: 2, style: 0 }, // Solid red
+                        B: { color: '#4ECDC4', width: 2, style: 0 }, // Solid teal
+                        C: { color: '#45B7D1', width: 2, style: 0 }  // Solid blue
+                    };
+                    
+                    console.log('📊 ABCPatternManager initialized');
+                }
+
+                // Add new ABC pattern to chart
+                addABCPattern(pattern) {
+                    try {
+                        if (!pattern) return;
+
+                        console.log('🌊 Adding ABC pattern:', pattern);
+
+                        // Wave A line
+                        this.addWaveLine('A', pattern.wave_a);
+                        
+                        // Wave B line
+                        this.addWaveLine('B', pattern.wave_b);
+                        
+                        // Wave C line
+                        this.addWaveLine('C', pattern.wave_c);
+
+                    } catch (error) {
+                        console.error('❌ Error adding ABC pattern:', error);
+                    }
+                }
+
+                // Add line for individual wave
+                addWaveLine(waveType, waveData) {
+                    try {
+                        const style = this.waveStyles[waveType];
+                        
+                        // Convert timestamps to chart time format
+                        const startTime = new Date(waveData.start_timestamp).getTime() / 1000;
+                        const endTime = new Date(waveData.end_timestamp).getTime() / 1000;
+                        
+                        // Validate timestamps
+                        if (isNaN(startTime) || isNaN(endTime)) {
+                            console.warn('⚠️ Invalid timestamps for wave', waveType);
+                            return;
+                        }
+
+                        // Create line data
+                        const lineData = [
+                            { time: startTime, value: waveData.start_price },
+                            { time: endTime, value: waveData.end_price }
+                        ];
+
+                        // Create line series
+                        const lineSeries = chart.addLineSeries({
+                            color: style.color,
+                            lineWidth: style.width,
+                            lineStyle: style.style,
+                            priceLineVisible: false,
+                            lastValueVisible: false,
+                            title: `ABC-Wave-${waveType}`
+                        });
+
+                        lineSeries.setData(lineData);
+                        this.abcLines.push(lineSeries);
+
+                        console.log(`✅ Added Wave ${waveType} line from ${waveData.start_price} to ${waveData.end_price}`);
+
+                    } catch (error) {
+                        console.error(`❌ Error adding wave ${waveType} line:`, error);
+                    }
+                }
+
+                // Load all ABC patterns at once
+                loadAllABCPatterns(abcPatterns) {
+                    try {
+                        if (!abcPatterns || abcPatterns.length === 0) {
+                            return;
+                        }
+
+                        console.log('🔄 Loading', abcPatterns.length, 'ABC patterns');
+
+                        // Clear existing patterns first
+                        this.clearABCPatterns();
+
+                        // Add each pattern
+                        abcPatterns.forEach((pattern) => {
+                            this.addABCPattern(pattern);
+                        });
+
+                    } catch (error) {
+                        console.error('❌ Error loading ABC patterns:', error);
+                    }
+                }
+
+                // Clear all ABC patterns from chart
+                clearABCPatterns() {
+                    try {
+                        this.abcLines.forEach(line => {
+                            chart.removeSeries(line);
+                        });
+                        this.abcLines = [];
+                        
+                        console.log('🧹 Cleared all ABC patterns');
+                    } catch (error) {
+                        console.error('❌ Error clearing ABC patterns:', error);
+                    }
+                }
+            }
+
             // Simple fractal detection - removed complex logic that caused infinite loops
 
             // Helper function to load data into backtesting engine
@@ -1579,6 +1885,28 @@ async def get_research_dashboard():
                         reloadCurrentSwingState();
                     } else {
                         console.log(`📊 New swing already processed in this update, skipping additional reload`);
+                    }
+                }
+                
+                // Process ABC patterns from strategy results
+                if (data.strategy_results && data.strategy_results.abc_patterns) {
+                    const results = data.strategy_results;
+                    console.log('🌊 ABC Pattern check:', {
+                        'has_abc_patterns': !!(results.abc_patterns && results.abc_patterns.length > 0),
+                        'abc_patterns_count': results.abc_patterns ? results.abc_patterns.length : 0,
+                        'checkbox_checked': document.getElementById('showABCPatterns') ? document.getElementById('showABCPatterns').checked : false,
+                        'abc_patterns_data': results.abc_patterns
+                    });
+                    
+                    if (results.abc_patterns && results.abc_patterns.length > 0) {
+                        accumulatedABCPatterns = results.abc_patterns;
+                        
+                        if (document.getElementById('showABCPatterns') && document.getElementById('showABCPatterns').checked) {
+                            console.log('✅ Calling abcPatternManager.displayABCPatterns with', results.abc_patterns.length, 'patterns');
+                            if (abcPatternManager) {
+                                abcPatternManager.displayABCPatterns(results.abc_patterns);
+                            }
+                        }
                     }
                 }
                 
@@ -1831,6 +2159,7 @@ async def get_research_dashboard():
                 fractalManager = new FractalMarkerManager(candlestickSeries);
                 swingLineManager = new SwingLineManager(candlestickSeries);
                 fibonacciManager = new FibonacciLevelManager(candlestickSeries);
+                abcPatternManager = new ABCPatternManager(candlestickSeries);
                 lookbackManager = new LookbackIndicatorManager();
                 
                 // Initialize professional tools system
@@ -2137,7 +2466,7 @@ async def get_research_dashboard():
                     console.log('🔄 Updating all chart markers and lines...');
                     
                     // Safety check for managers
-                    if (!fractalManager || !swingLineManager || !fibonacciManager) {
+                    if (!fractalManager || !swingLineManager || !fibonacciManager || !abcPatternManager) {
                         console.warn('Marker managers not initialized yet');
                         return;
                     }
@@ -2181,6 +2510,24 @@ async def get_research_dashboard():
                             console.log(`📐 Showing ${accumulatedFibonacci.length} Fibonacci levels`);
                         } else {
                             console.log('No Fibonacci levels or dominant swing available yet');
+                        }
+                    }
+
+                    // Handle ABC patterns
+                    if (!document.getElementById('showABCPatterns') || !document.getElementById('showABCPatterns').checked) {
+                        if (abcPatternManager) {
+                            abcPatternManager.clearABCPatterns();
+                            console.log('ABC patterns hidden by checkbox');
+                        }
+                    } else {
+                        // Load all accumulated ABC patterns using proper pattern management
+                        if (accumulatedABCPatterns && accumulatedABCPatterns.length > 0) {
+                            if (abcPatternManager) {
+                                abcPatternManager.displayABCPatterns(accumulatedABCPatterns);
+                                console.log(`🌊 Showing ${accumulatedABCPatterns.length} ABC patterns`);
+                            }
+                        } else {
+                            console.log('No ABC patterns accumulated yet');
                         }
                     }
 
