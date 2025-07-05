@@ -844,7 +844,11 @@ class FibonacciStrategy:
                 },
                 'pattern_type': latest_pattern.pattern_type,
                 'is_complete': latest_pattern.is_complete,
-                'fibonacci_confluence': latest_pattern.fibonacci_confluence
+                'fibonacci_confluence': latest_pattern.fibonacci_confluence,
+                # Add projection levels for incomplete patterns
+                'fe62_target': getattr(latest_pattern, 'fe62_target', None),
+                'fe100_target': getattr(latest_pattern, 'fe100_target', None),
+                'fe127_target': getattr(latest_pattern, 'fe127_target', None)
             }
         else:
             results['new_abc_pattern'] = None
@@ -882,7 +886,11 @@ class FibonacciStrategy:
                     },
                     'pattern_type': pattern.pattern_type,
                     'is_complete': pattern.is_complete,
-                    'fibonacci_confluence': pattern.fibonacci_confluence
+                    'fibonacci_confluence': pattern.fibonacci_confluence,
+                    # Add projection levels for incomplete patterns
+                    'fe62_target': getattr(pattern, 'fe62_target', None),
+                    'fe100_target': getattr(pattern, 'fe100_target', None),
+                    'fe127_target': getattr(pattern, 'fe127_target', None)
                 } for pattern in self.abc_patterns
             ]
         
@@ -999,51 +1007,51 @@ class FibonacciStrategy:
         if wave_a.direction == wave_b.direction:
             return None
         
-        # Step 6: Create Wave C (from fractal_c to current price)
+        # Step 6: ✅ FIXED - Only detect COMPLETE ABC patterns between fractals
+        # Look for next fractal after fractal_c to complete Wave C
+        next_fractals = [f for f in self.fractals if f.bar_index > fractal_c.bar_index]
+        
+        if not next_fractals:
+            # No complete Wave C yet - return incomplete pattern with projections
+            return self._create_incomplete_abc_with_projections(
+                wave_a, wave_b, fractal_c, current_price, current_timestamp
+            )
+        
+        # Find the next fractal that could complete Wave C
+        fractal_c_end = next_fractals[0]
+        
+        # Create Wave C between fractals (not to current price)
         wave_c = ABCWave(
             start_timestamp=fractal_c.timestamp,
-            end_timestamp=current_timestamp,
+            end_timestamp=fractal_c_end.timestamp,
             start_price=fractal_c.price,
-            end_price=current_price,
+            end_price=fractal_c_end.price,
             wave_type='C',
-            direction='up' if current_price > fractal_c.price else 'down',
-            points=abs(current_price - fractal_c.price),
-            bars=current_index - fractal_c.bar_index
+            direction='up' if fractal_c_end.price > fractal_c.price else 'down',
+            points=abs(fractal_c_end.price - fractal_c.price),
+            bars=fractal_c_end.bar_index - fractal_c.bar_index
         )
         
         # Step 7: Wave C must move same direction as Wave A (continuation of correction)
         if wave_a.direction != wave_c.direction:
             return None
         
-        # Step 8: Wave C should not exceed dominant swing bounds significantly (remain a correction)
-        dominant_swing_start = self.current_dominant_swing.start_fractal.price
-        dominant_swing_end = self.current_dominant_swing.end_fractal.price
-        
-        if dominant_swing_direction == 'up':
-            # For uptrend: correction shouldn't go below dominant swing start
-            if current_price < dominant_swing_start * 0.95:  # 5% tolerance
-                return None
-        else:
-            # For downtrend: correction shouldn't go above dominant swing start  
-            if current_price > dominant_swing_start * 1.05:  # 5% tolerance
-                return None
-        
-        # Step 9: Check Wave C completion ratios (100%, 61.8%, or 161.8% of Wave A)
+        # Step 8: Validate Wave C ratios (62%, 100%, 127% of Wave A)
         wave_c_ratio = wave_c.points / wave_a.points
-        valid_ratios = [0.618, 1.0, 1.618]  # 61.8%, 100%, 161.8%
+        valid_ratios = [0.618, 1.0, 1.27]  # Fe62, Fe100, Fe127
         tolerance = 0.1  # 10% tolerance
         
         is_complete = any(abs(wave_c_ratio - ratio) <= tolerance for ratio in valid_ratios)
         
-        # Step 10: Determine pattern type (simplified)
+        # Step 9: Determine pattern type
         pattern_type = 'zigzag'  # Default to zigzag for now
         
-        # Step 11: Check for Fibonacci confluence
+        # Step 10: Check for Fibonacci confluence
         fibonacci_confluence = None
         if hasattr(self, 'current_dominant_swing') and self.current_dominant_swing:
             fib_levels = self.calculate_fibonacci_levels(self.current_dominant_swing)
             for fib_level in fib_levels:
-                if abs(current_price - fib_level.price) <= 10:  # 10 point tolerance
+                if abs(fractal_c_end.price - fib_level.price) <= 10:  # 10 point tolerance
                     fibonacci_confluence = fib_level.level
                     break
         
@@ -1055,6 +1063,55 @@ class FibonacciStrategy:
             is_complete=is_complete,
             fibonacci_confluence=fibonacci_confluence
         )
+    
+    def _create_incomplete_abc_with_projections(self, wave_a: ABCWave, wave_b: ABCWave, 
+                                               fractal_c: Fractal, current_price: float, 
+                                               current_timestamp: pd.Timestamp) -> ABCPattern:
+        """Create incomplete ABC pattern with C wave projection levels."""
+        
+        # Calculate projection levels for Wave C (Fe62, Fe100, Fe127)
+        wave_a_points = wave_a.points
+        
+        # Project from fractal_c price
+        if wave_a.direction == 'down':
+            # For downward Wave A, C wave projects down
+            fe62_target = fractal_c.price - (wave_a_points * 0.618)
+            fe100_target = fractal_c.price - (wave_a_points * 1.0)
+            fe127_target = fractal_c.price - (wave_a_points * 1.27)
+        else:
+            # For upward Wave A, C wave projects up
+            fe62_target = fractal_c.price + (wave_a_points * 0.618)
+            fe100_target = fractal_c.price + (wave_a_points * 1.0)
+            fe127_target = fractal_c.price + (wave_a_points * 1.27)
+        
+        # Create incomplete Wave C showing current progress
+        wave_c = ABCWave(
+            start_timestamp=fractal_c.timestamp,
+            end_timestamp=current_timestamp,
+            start_price=fractal_c.price,
+            end_price=current_price,
+            wave_type='C',
+            direction=wave_a.direction,  # Same direction as Wave A
+            points=abs(current_price - fractal_c.price),
+            bars=0  # Will be updated when pattern completes
+        )
+        
+        # Store projection levels in the pattern
+        pattern = ABCPattern(
+            wave_a=wave_a,
+            wave_b=wave_b,
+            wave_c=wave_c,
+            pattern_type='zigzag',
+            is_complete=False,
+            fibonacci_confluence=None
+        )
+        
+        # Add projection levels as attributes
+        pattern.fe62_target = fe62_target
+        pattern.fe100_target = fe100_target
+        pattern.fe127_target = fe127_target
+        
+        return pattern
     
     def get_current_state(self) -> Dict:
         """Get current strategy state for dashboard display."""

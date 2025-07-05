@@ -663,8 +663,20 @@ async def get_research_dashboard():
                             <input type="checkbox" id="showFractals" checked onchange="refreshChartElements()">
                         </div>
                         <div class="metric">
+                            <span class="metric-label">Show Swings:</span>
+                            <input type="checkbox" id="showSwings" onchange="refreshChartElements()">
+                        </div>
+                        <div class="metric">
                             <span class="metric-label">Show Fibonacci:</span>
                             <input type="checkbox" id="showFibonacci" checked onchange="refreshChartElements()">
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Show ABC Patterns:</span>
+                            <input type="checkbox" id="showABC" onchange="refreshChartElements()">
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Show Signals:</span>
+                            <input type="checkbox" id="showSignals" onchange="refreshChartElements()">
                         </div>
                         <div class="metric">
                             <span class="metric-label">Fractal Periods:</span>
@@ -679,22 +691,6 @@ async def get_research_dashboard():
                         </div>
                         <div class="metric" style="font-size: 0.8em; color: #666; margin-top: 5px;">
                             <span>📊 Only swings within lookback period are considered for dominance</span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Show Swings:</span>
-                            <input type="checkbox" id="showSwings" onchange="refreshChartElements()">
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Show ABC Patterns:</span>
-                            <input type="checkbox" id="showABC" onchange="refreshChartElements()">
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Show Fibonacci:</span>
-                            <input type="checkbox" id="showFibonacci" onchange="refreshChartElements()">
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Show Signals:</span>
-                            <input type="checkbox" id="showSignals" onchange="refreshChartElements()">
                         </div>
                         <div class="metric">
                             <span class="metric-label">Show Lookback Line:</span>
@@ -1497,6 +1493,8 @@ async def get_research_dashboard():
                     this.candlestickSeries = candlestickSeries;
                     this.abcLines = [];
                     this.abcLabels = [];
+                    this.addedPatterns = new Set(); // 🔧 Track added patterns to prevent duplicates
+                    this.lastDominantSwingId = null; // 🔧 Track dominant swing changes
                     
                     // ABC wave styling - dotted lines to show wave connections
                     this.waveStyles = {
@@ -1521,8 +1519,13 @@ async def get_research_dashboard():
                         // Wave B line
                         this.addWaveLine('B', pattern.wave_b);
                         
-                        // Wave C line
-                        this.addWaveLine('C', pattern.wave_c);
+                        // Wave C line (if complete)
+                        if (pattern.is_complete) {
+                            this.addWaveLine('C', pattern.wave_c);
+                        } else {
+                            // Add projection levels for incomplete Wave C
+                            this.addProjectionLevels(pattern);
+                        }
 
                     } catch (error) {
                         console.error('❌ Error adding ABC pattern:', error);
@@ -1571,25 +1574,134 @@ async def get_research_dashboard():
                 }
 
                 // Load all ABC patterns at once
-                loadAllABCPatterns(abcPatterns) {
+                loadAllABCPatterns(abcPatterns, currentDominantSwing = null) {
                     try {
                         if (!abcPatterns || abcPatterns.length === 0) {
                             return;
                         }
 
                         console.log('🔄 Loading', abcPatterns.length, 'ABC patterns');
+                        
+                        // 🔧 CRUCIAL: Check if dominant swing has changed
+                        const currentSwingId = currentDominantSwing ? 
+                            `${currentDominantSwing.start_fractal.timestamp}-${currentDominantSwing.end_fractal.timestamp}` : null;
+                        
+                        if (this.lastDominantSwingId && this.lastDominantSwingId !== currentSwingId) {
+                            console.log('🔄 DOMINANT SWING CHANGED - Clearing old ABC patterns');
+                            this.clearABCPatterns();
+                        }
+                        
+                        this.lastDominantSwingId = currentSwingId;
 
-                        // Clear existing patterns first
-                        this.clearABCPatterns();
-
-                        // Add each pattern
+                        // 🔧 FIXED: Only add new patterns, don't clear and re-add everything
+                        let newPatternsAdded = 0;
+                        
                         abcPatterns.forEach((pattern) => {
-                            this.addABCPattern(pattern);
+                            const patternId = this.getPatternId(pattern);
+                            if (!this.addedPatterns.has(patternId)) {
+                                this.addABCPattern(pattern);
+                                this.addedPatterns.add(patternId);
+                                newPatternsAdded++;
+                            }
                         });
+                        
+                        if (newPatternsAdded > 0) {
+                            console.log(`✅ Added ${newPatternsAdded} new ABC patterns (${this.addedPatterns.size} total)`);
+                        }
 
                     } catch (error) {
                         console.error('❌ Error loading ABC patterns:', error);
                     }
+                }
+
+                // Add C wave projection levels (Fe62, Fe100, Fe127)
+                addProjectionLevels(pattern) {
+                    try {
+                        if (!pattern.fe62_target || !pattern.fe100_target || !pattern.fe127_target) {
+                            console.warn('⚠️ No projection levels found in pattern');
+                            return;
+                        }
+
+                        const waveC = pattern.wave_c;
+                        const startTime = new Date(waveC.start_timestamp).getTime() / 1000;
+                        
+                        // 🔧 FIXED: Create shorter projection lines (not full-width)
+                        const projectionLength = 3600 * 24 * 2; // 2 days forward only
+                        const endTime = startTime + projectionLength;
+                        
+                        // Fe62 level (61.8%) - Orange
+                        this.addProjectionLine(startTime, endTime, pattern.fe62_target, 'Fe62', '#FF9500');
+                        
+                        // Fe100 level (100%) - Red
+                        this.addProjectionLine(startTime, endTime, pattern.fe100_target, 'Fe100', '#FF0000');
+                        
+                        // Fe127 level (127%) - Dark Red
+                        this.addProjectionLine(startTime, endTime, pattern.fe127_target, 'Fe127', '#8B0000');
+                        
+                        console.log('✅ Added C wave projection levels:', {
+                            fe62: pattern.fe62_target,
+                            fe100: pattern.fe100_target,
+                            fe127: pattern.fe127_target
+                        });
+                        
+                    } catch (error) {
+                        console.error('❌ Error adding projection levels:', error);
+                    }
+                }
+                
+                // Add individual projection line with text label
+                addProjectionLine(startTime, endTime, price, label, color) {
+                    try {
+                        const lineData = [
+                            { time: startTime, value: price },
+                            { time: endTime, value: price }
+                        ];
+
+                        const lineSeries = chart.addLineSeries({
+                            color: color,
+                            lineWidth: 1,
+                            lineStyle: 1, // Dashed line
+                            priceLineVisible: false,  // 🔧 FIXED: Prevent price scale clutter
+                            lastValueVisible: false,  // 🔧 FIXED: Prevent price scale clutter
+                            title: `ABC-${label}`,
+                            priceFormat: {
+                                type: 'price',
+                                precision: 2,
+                                minMove: 0.01,
+                            }
+                        });
+
+                        lineSeries.setData(lineData);
+                        this.abcLines.push(lineSeries);
+                        
+                        // 🏷️ Add text label above the line
+                        const markerTime = startTime + ((endTime - startTime) * 0.3); // Position at 30% of line length
+                        const textMarker = {
+                            time: markerTime,
+                            position: 'aboveBar',
+                            color: color,
+                            shape: 'square',
+                            text: label,
+                            size: 0 // Hide the marker shape, just show text
+                        };
+                        
+                        lineSeries.setMarkers([textMarker]);
+                        
+                        console.log(`✅ Added ${label} projection line at ${price} with text label`);
+                        
+                    } catch (error) {
+                        console.error(`❌ Error adding ${label} projection line:`, error);
+                    }
+                }
+
+                // Generate unique ID for pattern to prevent duplicates
+                getPatternId(pattern) {
+                    // Create unique ID based on wave timestamps and prices
+                    const waveA = pattern.wave_a;
+                    const waveB = pattern.wave_b;
+                    const waveC = pattern.wave_c;
+                    
+                    return `${waveA.start_timestamp}_${waveA.end_timestamp}_${waveB.end_timestamp}_${waveC.start_timestamp}`;
                 }
 
                 // Clear all ABC patterns from chart
@@ -1599,6 +1711,7 @@ async def get_research_dashboard():
                             chart.removeSeries(line);
                         });
                         this.abcLines = [];
+                        this.addedPatterns.clear(); // 🔧 Clear tracking set too
                         
                         console.log('🧹 Cleared all ABC patterns');
                     } catch (error) {
@@ -1682,9 +1795,25 @@ async def get_research_dashboard():
                     const newSwing = data.strategy_results.new_swing;
                     console.log(`🔥 NEW SWING DETECTED from backend:`, newSwing);
                     
+                    // 🔧 CRUCIAL: Check if this is a new dominant swing
+                    const previousDominantSwing = accumulatedDominantSwing;
+                    const newDominantSwing = newSwing.is_dominant ? newSwing : null;
+                    
+                    // Clear ABC patterns if dominant swing has changed
+                    if (previousDominantSwing && newDominantSwing && 
+                        previousDominantSwing.start_fractal.timestamp !== newDominantSwing.start_fractal.timestamp) {
+                        console.log('🔄 DOMINANT SWING CHANGED - Clearing old ABC patterns');
+                        if (abcPatternManager) {
+                            abcPatternManager.clearABCPatterns();
+                        }
+                        accumulatedABCPatterns = []; // Clear accumulated ABC patterns
+                    }
+                    
                     // Add the new swing to accumulated swings (replacing any existing swing)
                     accumulatedSwings = []; // Clear existing swings for clean dominance
                     accumulatedSwings.push(newSwing);
+                    
+                    // 🔧 RESTORED ORIGINAL LOGIC: This was actually correct!
                     accumulatedDominantSwing = newSwing.is_dominant ? newSwing : null;
                     
                     console.log(`📈 Swing added: ${newSwing.direction} from ${newSwing.start_fractal.price} to ${newSwing.end_fractal.price}, dominant: ${newSwing.is_dominant}`);
@@ -1724,7 +1853,7 @@ async def get_research_dashboard():
                         if (document.getElementById('showABC') && document.getElementById('showABC').checked) {
                             console.log('✅ Calling abcPatternManager.loadAllABCPatterns with', results.abc_patterns.length, 'patterns');
                             if (abcPatternManager) {
-                                abcPatternManager.loadAllABCPatterns(results.abc_patterns);
+                                abcPatternManager.loadAllABCPatterns(results.abc_patterns, accumulatedDominantSwing);
                             }
                         }
                     }
@@ -2293,7 +2422,9 @@ async def get_research_dashboard():
                     }
                     
                     // Handle fractals
-                    if (!document.getElementById('showFractals').checked) {
+                    const showFractals = document.getElementById('showFractals').checked;
+                    console.log(`🔄 Processing fractals: checkbox=${showFractals}, accumulated=${accumulatedFractals.length}`);
+                    if (!showFractals) {
                         fractalManager.clearFractals();
                         console.log('Fractals hidden by checkbox');
                     } else {
@@ -2307,7 +2438,9 @@ async def get_research_dashboard():
                     }
                     
                     // Handle swing lines
-                    if (!document.getElementById('showSwings').checked) {
+                    const showSwings = document.getElementById('showSwings').checked;
+                    console.log(`🔄 Processing swings: checkbox=${showSwings}, accumulated=${accumulatedSwings.length}`);
+                    if (!showSwings) {
                         swingLineManager.removeAllSwingLines();
                         console.log('Swing lines hidden by checkbox');
                     } else {
@@ -2335,7 +2468,9 @@ async def get_research_dashboard():
                     }
 
                     // Handle ABC patterns
-                    if (!document.getElementById('showABC') || !document.getElementById('showABC').checked) {
+                    const showABC = document.getElementById('showABC') ? document.getElementById('showABC').checked : false;
+                    console.log(`🔄 Processing ABC: checkbox=${showABC}, accumulated=${accumulatedABCPatterns.length}`);
+                    if (!showABC) {
                         if (abcPatternManager) {
                             abcPatternManager.clearABCPatterns();
                             console.log('ABC patterns hidden by checkbox');
@@ -2344,7 +2479,7 @@ async def get_research_dashboard():
                         // Load all accumulated ABC patterns using proper pattern management
                         if (accumulatedABCPatterns && accumulatedABCPatterns.length > 0) {
                             if (abcPatternManager) {
-                                abcPatternManager.loadAllABCPatterns(accumulatedABCPatterns);
+                                abcPatternManager.loadAllABCPatterns(accumulatedABCPatterns, accumulatedDominantSwing);
                                 console.log(`🌊 Showing ${accumulatedABCPatterns.length} ABC patterns`);
                             }
                         } else {
@@ -2925,6 +3060,15 @@ async def get_research_dashboard():
             // Refresh chart elements based on settings checkboxes
             function refreshChartElements() {
                 console.log('🔄 Refreshing chart elements based on settings...');
+                
+                // Debug: Log checkbox states
+                console.log('📊 Checkbox states:', {
+                    fractals: document.getElementById('showFractals') ? document.getElementById('showFractals').checked : 'not found',
+                    swings: document.getElementById('showSwings') ? document.getElementById('showSwings').checked : 'not found',
+                    fibonacci: document.getElementById('showFibonacci') ? document.getElementById('showFibonacci').checked : 'not found',
+                    abc: document.getElementById('showABC') ? document.getElementById('showABC').checked : 'not found',
+                    signals: document.getElementById('showSignals') ? document.getElementById('showSignals').checked : 'not found'
+                });
                 
                 if (!chart || !candlestickSeries) {
                     console.warn('Chart not initialized yet - skipping refresh');
