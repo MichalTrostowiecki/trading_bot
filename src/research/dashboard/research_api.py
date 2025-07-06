@@ -2612,32 +2612,58 @@ async def get_research_dashboard():
                         const alpha = 0.1 + (strength * 0.2); // 0.1 to 0.3 alpha based on strength
                         const fillColor = style.fillColor.replace('0.15', alpha.toFixed(2));
                         
-                        // Create rectangle using price lines (TradingView Lightweight Charts approach)
-                        // Since addRectangleSeries may not exist, we'll use price lines to create zones
+                        // Create filled zone using area series (TradingView professional approach)
+                        const areaSeries = chart.addAreaSeries({
+                            topColor: fillColor,
+                            bottomColor: fillColor,
+                            lineColor: style.borderColor,
+                            lineWidth: style.borderWidth,
+                            crosshairMarkerVisible: false,
+                            priceLineVisible: false,
+                            lastValueVisible: false,
+                            title: `${zone.zone_type.toUpperCase()} Zone`
+                        });
+                        
+                        // Create area data for the zone time range
+                        const zoneAreaData = [];
+                        const startTime = Math.floor(new Date(zone.left_time).getTime() / 1000);
+                        const endTime = Math.floor(new Date(zone.right_time).getTime() / 1000);
+                        
+                        // Create data points for the filled area
+                        zoneAreaData.push({
+                            time: startTime,
+                            value: zone.top_price
+                        });
+                        zoneAreaData.push({
+                            time: endTime,
+                            value: zone.top_price
+                        });
+                        
+                        areaSeries.setData(zoneAreaData);
+                        
+                        // Also add border lines for clarity
                         const topLine = this.candlestickSeries.createPriceLine({
                             price: zone.top_price,
                             color: style.borderColor,
-                            lineWidth: 2,
-                            lineStyle: 0, // Solid line
+                            lineWidth: 1,
+                            lineStyle: 0,
                             axisLabelVisible: false,
-                            title: `${zone.zone_type.toUpperCase()} Zone Top`
+                            title: `${zone.zone_type.toUpperCase()} Top`
                         });
                         
                         const bottomLine = this.candlestickSeries.createPriceLine({
                             price: zone.bottom_price,
                             color: style.borderColor,
-                            lineWidth: 2,
-                            lineStyle: 0, // Solid line
+                            lineWidth: 1,
+                            lineStyle: 0,
                             axisLabelVisible: false,
-                            title: `${zone.zone_type.toUpperCase()} Zone Bottom`
+                            title: `${zone.zone_type.toUpperCase()} Bottom`
                         });
                         
-                        // For now, we'll use price lines as zone boundaries
-                        // Later we can enhance this with filled rectangles if the API supports it
-                        
-                        // Store zone lines reference
+                        // Store zone references (area + lines)
                         this.zoneRectangles.push({
                             zone: zone,
+                            areaSeries: areaSeries,
                             topLine: topLine,
                             bottomLine: bottomLine,
                             id: zoneId,
@@ -2708,7 +2734,8 @@ async def get_research_dashboard():
                 // Clear all zones
                 clearZones() {
                     this.zoneRectangles.forEach(rect => {
-                        // Remove price lines
+                        // Remove area series and price lines
+                        chart.removeSeries(rect.areaSeries);
                         this.candlestickSeries.removePriceLine(rect.topLine);
                         this.candlestickSeries.removePriceLine(rect.bottomLine);
                     });
