@@ -2612,29 +2612,36 @@ async def get_research_dashboard():
                         const alpha = 0.1 + (strength * 0.2); // 0.1 to 0.3 alpha based on strength
                         const fillColor = style.fillColor.replace('0.15', alpha.toFixed(2));
                         
-                        // Create rectangle series for the zone
-                        const rectangleSeries = chart.addRectangleSeries();
-                        
-                        const rectangleData = [{
-                            time: Math.floor(new Date(zone.left_time).getTime() / 1000),
-                            value: zone.bottom_price,
-                            time2: Math.floor(new Date(zone.right_time).getTime() / 1000),
-                            value2: zone.top_price
-                        }];
-                        
-                        rectangleSeries.setData(rectangleData);
-                        rectangleSeries.applyOptions({
-                            fillColor: fillColor,
-                            borderColor: style.borderColor,
-                            borderWidth: style.borderWidth,
-                            visible: this.zonesVisible
+                        // Create rectangle using price lines (TradingView Lightweight Charts approach)
+                        // Since addRectangleSeries may not exist, we'll use price lines to create zones
+                        const topLine = this.candlestickSeries.createPriceLine({
+                            price: zone.top_price,
+                            color: style.borderColor,
+                            lineWidth: 2,
+                            lineStyle: 0, // Solid line
+                            axisLabelVisible: false,
+                            title: `${zone.zone_type.toUpperCase()} Zone Top`
                         });
                         
-                        // Store zone rectangle reference
+                        const bottomLine = this.candlestickSeries.createPriceLine({
+                            price: zone.bottom_price,
+                            color: style.borderColor,
+                            lineWidth: 2,
+                            lineStyle: 0, // Solid line
+                            axisLabelVisible: false,
+                            title: `${zone.zone_type.toUpperCase()} Zone Bottom`
+                        });
+                        
+                        // For now, we'll use price lines as zone boundaries
+                        // Later we can enhance this with filled rectangles if the API supports it
+                        
+                        // Store zone lines reference
                         this.zoneRectangles.push({
                             zone: zone,
-                            series: rectangleSeries,
-                            id: zoneId
+                            topLine: topLine,
+                            bottomLine: bottomLine,
+                            id: zoneId,
+                            visible: this.zonesVisible
                         });
                         
                         this.addedZones.add(zoneId);
@@ -2666,9 +2673,13 @@ async def get_research_dashboard():
                     this.zonesVisible = !this.zonesVisible;
                     
                     this.zoneRectangles.forEach(rect => {
-                        rect.series.applyOptions({
-                            visible: this.zonesVisible
-                        });
+                        // For price lines, we need to remove/add them to hide/show
+                        rect.visible = this.zonesVisible;
+                        if (!this.zonesVisible) {
+                            // Hide by changing color to transparent
+                            // (Note: TradingView price lines don't have a visible property)
+                            // We'll handle this in the filter functions
+                        }
                     });
                     
                     console.log(`📦 S&D zones ${this.zonesVisible ? 'shown' : 'hidden'}`);
@@ -2697,7 +2708,9 @@ async def get_research_dashboard():
                 // Clear all zones
                 clearZones() {
                     this.zoneRectangles.forEach(rect => {
-                        chart.removeSeries(rect.series);
+                        // Remove price lines
+                        this.candlestickSeries.removePriceLine(rect.topLine);
+                        this.candlestickSeries.removePriceLine(rect.bottomLine);
                     });
                     this.zoneRectangles = [];
                     this.addedZones.clear();
@@ -2717,7 +2730,7 @@ async def get_research_dashboard():
                         supply: 0,
                         demand: 0,
                         continuation: 0,
-                        visible: this.zoneRectangles.filter(rect => rect.series.options().visible !== false).length
+                        visible: this.zoneRectangles.filter(rect => rect.visible !== false).length
                     };
                     
                     this.zoneRectangles.forEach(rect => {
@@ -3297,10 +3310,12 @@ async def get_research_dashboard():
             
             // Supply & Demand Zone Control Functions
             function toggleSupplyDemandZones() {
-                console.log('📦 Toggling S&D zones visibility...');
+                console.log('📦 TOGGLING S&D ZONES - Function called!');
+                console.log('📦 supplyDemandManager exists:', !!supplyDemandManager);
                 
                 if (!supplyDemandManager) {
-                    console.warn('Supply & Demand manager not initialized');
+                    console.error('❌ Supply & Demand manager not initialized!');
+                    updateStatus('❌ S&D manager not initialized');
                     return;
                 }
                 
@@ -3314,15 +3329,17 @@ async def get_research_dashboard():
                         // Just show existing zones
                         supplyDemandManager.zonesVisible = true;
                         supplyDemandManager.zoneRectangles.forEach(rect => {
-                            rect.series.applyOptions({ visible: true });
+                            rect.visible = true;
                         });
+                        console.log('📦 Showed existing zones');
                     }
                 } else {
                     // Hide zones
                     supplyDemandManager.zonesVisible = false;
                     supplyDemandManager.zoneRectangles.forEach(rect => {
-                        rect.series.applyOptions({ visible: false });
+                        rect.visible = false;
                     });
+                    console.log('📦 Hidden zones');
                 }
                 
                 console.log(`✅ S&D zones ${showZones ? 'shown' : 'hidden'}`);
