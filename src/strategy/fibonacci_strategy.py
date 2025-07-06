@@ -9,6 +9,9 @@ from typing import List, Dict, Tuple, Optional, Any
 from dataclasses import dataclass
 import logging
 
+# Import confluence engine
+from ..analysis.confluence_engine import ConfluenceEngine, ConfluenceZone, CandlestickPattern
+
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -87,7 +90,8 @@ class FibonacciStrategy:
                  min_swing_points: float = 50.0,
                  fibonacci_levels: List[float] = None,
                  risk_reward_ratio: float = 2.0,
-                 lookback_candles: int = 140):
+                 lookback_candles: int = 140,
+                 enable_confluence_analysis: bool = True):
         """
         Initialize Fibonacci Strategy.
         
@@ -115,6 +119,12 @@ class FibonacciStrategy:
         self.current_bar = 0
         self.dominant_trend = None  # 'up' or 'down'
         self.current_dominant_swing = None  # Track current dominant swing for invalidation
+        
+        # Confluence analysis engine
+        self.enable_confluence_analysis = enable_confluence_analysis
+        self.confluence_engine = ConfluenceEngine() if enable_confluence_analysis else None
+        self.confluence_zones: List[ConfluenceZone] = []
+        self.candlestick_patterns: List[CandlestickPattern] = []
         
     def detect_fractals(self, df: pd.DataFrame, current_index: int) -> Optional[Fractal]:
         """
@@ -411,17 +421,17 @@ class FibonacciStrategy:
     def recalculate_swings_for_lookback_window(self):
         """
         Recalculate swings from scratch when lookback window moves.
-        This ensures swings always connect the absolute extremes within the current lookback window.
-        
-        🚨 CRITICAL FIX: This method completely rebuilds swing structure to fix the extension bug.
+
+        🚨 CRITICAL FIX: Focus on current 140-candle window and invalidate old swings
+        when new extremes are found within this window.
         """
         if not self.fractals or not hasattr(self, 'current_bar') or self.current_bar is None:
             return
 
         lookback_start = max(0, self.current_bar - self.lookback_candles)
-        logger.debug(f"🔄 LOOKBACK RECALC: Window starts at bar {lookback_start}")
+        logger.debug(f"🔄 LOOKBACK RECALC: Current window [{lookback_start} to {self.current_bar}]")
 
-        # Find all fractals within the current lookback window
+        # Find all fractals within the current 140-candle lookback window
         fractals_in_window = [f for f in self.fractals if f.bar_index >= lookback_start]
 
         if len(fractals_in_window) < 2:
@@ -430,7 +440,7 @@ class FibonacciStrategy:
             self.current_dominant_swing = None
             return
 
-        # Find absolute extremes within the lookback window
+        # Find absolute extremes within the current 140-candle window
         highest_high_fractal = None
         lowest_low_fractal = None
         highest_price = float('-inf')
@@ -445,10 +455,38 @@ class FibonacciStrategy:
                 lowest_low_fractal = fractal
 
         if not highest_high_fractal or not lowest_low_fractal:
-            logger.debug(f"⚠️ Missing extreme fractals in lookback window")
+            logger.debug(f"⚠️ Missing extreme fractals in current window")
             self.swings.clear()
             self.current_dominant_swing = None
             return
+
+        # 🚨 CRITICAL FIX: Check if current swing is invalidated by new extremes in current window
+        if self.current_dominant_swing:
+            swing_invalidated = False
+            invalidation_reason = ""
+
+            if self.current_dominant_swing.direction == 'up':
+                # UP swing: invalidated if we find a lower low than swing start within current window
+                if lowest_low_fractal.price < self.current_dominant_swing.start_fractal.price:
+                    swing_invalidated = True
+                    invalidation_reason = f"New lower low {lowest_low_fractal.price:.2f} < swing start {self.current_dominant_swing.start_fractal.price:.2f}"
+            else:
+                # DOWN swing: invalidated if we find a higher high than swing start within current window
+                if highest_high_fractal.price > self.current_dominant_swing.start_fractal.price:
+                    swing_invalidated = True
+                    invalidation_reason = f"New higher high {highest_high_fractal.price:.2f} > swing start {self.current_dominant_swing.start_fractal.price:.2f}"
+
+            # Also invalidate if swing is completely outside current window
+            if (self.current_dominant_swing.start_fractal.bar_index < lookback_start and
+                self.current_dominant_swing.end_fractal.bar_index < lookback_start):
+                swing_invalidated = True
+                invalidation_reason = f"Swing completely outside current window (ends at bar {self.current_dominant_swing.end_fractal.bar_index})"
+
+            if swing_invalidated:
+                logger.debug(f"🔥 SWING INVALIDATED: {invalidation_reason}")
+            else:
+                logger.debug(f"✅ Current swing still VALID within current window")
+                return
 
         # 🚨 CRITICAL FIX: Clear ALL existing swings and rebuild from scratch
         # This prevents accumulation of outdated swings
@@ -456,7 +494,7 @@ class FibonacciStrategy:
         self.current_dominant_swing = None
         logger.debug(f"🧹 CLEARED all existing swings for fresh recalculation")
 
-        # Create THE swing connecting absolute extremes (Elliott Wave principle)
+        # Create THE swing connecting absolute extremes within current window
         # Determine direction based on which extreme comes first chronologically
         if highest_high_fractal.bar_index < lowest_low_fractal.bar_index:
             # High comes first, then low = DOWN swing
@@ -474,7 +512,7 @@ class FibonacciStrategy:
 
         # Only create swing if it meets minimum criteria
         if points >= self.min_swing_points:
-            # Create the ONE dominant swing connecting absolute extremes
+            # Create the ONE dominant swing connecting absolute extremes within current window
             dominant_swing = Swing(
                 start_fractal=start_fractal,
                 end_fractal=end_fractal,
@@ -486,12 +524,12 @@ class FibonacciStrategy:
 
             self.swings.append(dominant_swing)
             self.current_dominant_swing = dominant_swing
-            
-            logger.debug(f"🔥 LOOKBACK RECALC: Created DOMINANT {direction} swing connecting absolute extremes")
+
+            logger.debug(f"🔥 LOOKBACK RECALC: Created DOMINANT {direction} swing in current window")
             logger.debug(f"   Start: {start_fractal.price:.2f} at bar {start_fractal.bar_index}")
             logger.debug(f"   End: {end_fractal.price:.2f} at bar {end_fractal.bar_index}")
             logger.debug(f"   Points: {points:.1f}")
-            
+
             # Calculate new Fibonacci levels for the new dominant swing
             self.fibonacci_zones = self.calculate_fibonacci_levels(dominant_swing)
             logger.debug(f"📐 FIBONACCI RECALCULATED: {len(self.fibonacci_zones)} levels for new dominant swing")
@@ -650,6 +688,21 @@ class FibonacciStrategy:
         Returns:
             Dictionary with current analysis results
         """
+        # Validate input data
+        if df.empty or current_index >= len(df) or current_index < 0:
+            return {
+                'bar_index': current_index,
+                'timestamp': None,
+                'new_fractal': None,
+                'new_swing': None,
+                'new_signals': [],
+                'fibonacci_levels': [],
+                'total_fractals': len(self.fractals),
+                'total_swings': len(self.swings),
+                'total_signals': len(self.signals),
+                'market_bias': None
+            }
+
         self.current_bar = current_index
         results = {
             'bar_index': current_index,
@@ -685,7 +738,12 @@ class FibonacciStrategy:
                 should_recalculate = True
                 recalc_reason = f"start fractal (bar {self.current_dominant_swing.start_fractal.bar_index}) outside lookback window (starts at bar {lookback_start})"
             
-            # 🚨 CRITICAL FIX: Reason 2: New extremes within lookback window that create bigger swing
+            # Reason 2: Dominant swing's end fractal is now outside the lookback window
+            elif self.current_dominant_swing.end_fractal.bar_index < lookback_start:
+                should_recalculate = True
+                recalc_reason = f"end fractal (bar {self.current_dominant_swing.end_fractal.bar_index}) outside lookback window (starts at bar {lookback_start})"
+            
+            # 🚨 CRITICAL FIX: Reason 3: New extremes within lookback window that create bigger swing
             elif len(self.fractals) > 0:
                 # Find current extremes within lookback window
                 fractals_in_window = [f for f in self.fractals if f.bar_index >= lookback_start]
@@ -711,14 +769,41 @@ class FibonacciStrategy:
                         elif potential_points > current_points + 10:  # Allow small tolerance
                             should_recalculate = True
                             recalc_reason = f"bigger swing possible ({potential_points:.1f} pts vs current {current_points:.1f} pts)"
-            
-            # Trigger recalculation if needed
-            if should_recalculate:
-                logger.debug(f"🔄 LOOKBACK RECALC TRIGGERED: {recalc_reason}")
-                self.current_dominant_swing = None  # Clear current swing
-                self.recalculate_swings_for_lookback_window()  # Recalculate from scratch
-                results['lookback_recalculation'] = True
-                results['market_bias'] = self.get_market_bias()  # Update market bias after recalculation
+        
+        # 🚨 CRITICAL FIX: Reason 4: Check if lookback window has shifted significantly and we need to recalculate
+        # This handles cases where new extremes enter the lookback window that should change dominance
+        elif not self.current_dominant_swing and len(self.fractals) > 0:
+            # If we have no dominant swing but have fractals, try to establish one
+            fractals_in_window = [f for f in self.fractals if f.bar_index >= lookback_start]
+            if len(fractals_in_window) >= 2:
+                should_recalculate = True
+                recalc_reason = f"no dominant swing but {len(fractals_in_window)} fractals in lookback window"
+        
+        # 🚨 CRITICAL FIX: Reason 5: Periodic recalculation to ensure dominance is always based on current lookback window
+        # This is the most robust fix - recalculate every N bars to ensure swing dominance is current
+        elif self.current_dominant_swing and current_index % 10 == 0:  # Check every 10 bars
+            # Quick check: ensure current swing is still the biggest in the lookback window
+            fractals_in_window = [f for f in self.fractals if f.bar_index >= lookback_start]
+            if len(fractals_in_window) >= 2:
+                highest_high = max([f for f in fractals_in_window if f.fractal_type == 'high'], key=lambda f: f.price, default=None)
+                lowest_low = min([f for f in fractals_in_window if f.fractal_type == 'low'], key=lambda f: f.price, default=None)
+                
+                if highest_high and lowest_low:
+                    potential_points = abs(highest_high.price - lowest_low.price)
+                    current_points = self.current_dominant_swing.points
+                    
+                    # If we find a significantly bigger swing (>5% larger), recalculate
+                    if potential_points > current_points * 1.05:
+                        should_recalculate = True
+                        recalc_reason = f"periodic check found bigger swing ({potential_points:.1f} vs {current_points:.1f} pts)"
+        
+        # Trigger recalculation if needed
+        if should_recalculate:
+            logger.debug(f"🔄 LOOKBACK RECALC TRIGGERED: {recalc_reason}")
+            self.current_dominant_swing = None  # Clear current swing
+            self.recalculate_swings_for_lookback_window()  # Recalculate from scratch
+            results['lookback_recalculation'] = True
+            results['market_bias'] = self.get_market_bias()  # Update market bias after recalculation
         
         # 1. Check for new fractal (need future bars, so delay by fractal_period)
         if current_index >= self.fractal_period * 2:
@@ -809,11 +894,12 @@ class FibonacciStrategy:
         if abc_patterns:
             # Store ABC patterns
             self.abc_patterns.extend(abc_patterns)
-            
+
             # Add latest pattern to results
             latest_pattern = abc_patterns[-1]
             logger.debug(f"🌊 ABC Pattern: {latest_pattern.pattern_type} - Wave A: {latest_pattern.wave_a.direction} {latest_pattern.wave_a.points:.1f}pts, Wave B: {latest_pattern.wave_b.direction} {latest_pattern.wave_b.points:.1f}pts, Wave C: {latest_pattern.wave_c.direction} {latest_pattern.wave_c.points:.1f}pts")
-            
+
+            # Send new ABC pattern to frontend
             results['new_abc_pattern'] = {
                 'wave_a': {
                     'start_timestamp': latest_pattern.wave_a.start_timestamp.isoformat(),
@@ -852,47 +938,31 @@ class FibonacciStrategy:
             }
         else:
             results['new_abc_pattern'] = None
+
+        # 6. Confluence Analysis
+        if self.enable_confluence_analysis and self.confluence_engine:
+            confluence_results = self.confluence_engine.process_bar(
+                df=df,
+                current_index=current_index,
+                fibonacci_levels=results.get('fibonacci_levels', []),
+                abc_patterns=[self._serialize_abc_pattern(p) for p in abc_patterns] if abc_patterns else [],
+                symbol=getattr(df, 'symbol', 'UNKNOWN'),
+                timeframe=getattr(df, 'timeframe', '1H')
+            )
+
+            # Store confluence results
+            results['confluence_analysis'] = confluence_results
+
+            # Store confluence zones and patterns for later analysis
+            if confluence_results.get('confluence_zones'):
+                self.confluence_zones.extend(confluence_results['confluence_zones'])
+            if confluence_results.get('candlestick_patterns'):
+                self.candlestick_patterns.extend(confluence_results['candlestick_patterns'])
+
+            logger.debug(f"📊 CONFLUENCE: {confluence_results['total_factors']} factors, {len(confluence_results['confluence_zones'])} zones")
         
-        # Return all accumulated ABC patterns for dashboard visualization
-        if self.abc_patterns:
-            results['abc_patterns'] = [
-                {
-                    'wave_a': {
-                        'start_timestamp': pattern.wave_a.start_timestamp.isoformat(),
-                        'end_timestamp': pattern.wave_a.end_timestamp.isoformat(),
-                        'start_price': pattern.wave_a.start_price,
-                        'end_price': pattern.wave_a.end_price,
-                        'direction': pattern.wave_a.direction,
-                        'points': pattern.wave_a.points,
-                        'bars': pattern.wave_a.bars
-                    },
-                    'wave_b': {
-                        'start_timestamp': pattern.wave_b.start_timestamp.isoformat(),
-                        'end_timestamp': pattern.wave_b.end_timestamp.isoformat(),
-                        'start_price': pattern.wave_b.start_price,
-                        'end_price': pattern.wave_b.end_price,
-                        'direction': pattern.wave_b.direction,
-                        'points': pattern.wave_b.points,
-                        'bars': pattern.wave_b.bars
-                    },
-                    'wave_c': {
-                        'start_timestamp': pattern.wave_c.start_timestamp.isoformat(),
-                        'end_timestamp': pattern.wave_c.end_timestamp.isoformat(),
-                        'start_price': pattern.wave_c.start_price,
-                        'end_price': pattern.wave_c.end_price,
-                        'direction': pattern.wave_c.direction,
-                        'points': pattern.wave_c.points,
-                        'bars': pattern.wave_c.bars
-                    },
-                    'pattern_type': pattern.pattern_type,
-                    'is_complete': pattern.is_complete,
-                    'fibonacci_confluence': pattern.fibonacci_confluence,
-                    # Add projection levels for incomplete patterns
-                    'fe62_target': getattr(pattern, 'fe62_target', None),
-                    'fe100_target': getattr(pattern, 'fe100_target', None),
-                    'fe127_target': getattr(pattern, 'fe127_target', None)
-                } for pattern in self.abc_patterns
-            ]
+        # Note: ABC patterns are now sent individually as 'new_abc_pattern' when detected
+        # This prevents showing all patterns at once and ensures progressive display
         
         results['total_fractals'] = len(self.fractals)
         results['total_swings'] = len(self.swings) 
@@ -908,9 +978,41 @@ class FibonacciStrategy:
         self.fibonacci_zones.clear()
         self.signals.clear()
         self.abc_patterns.clear()
+        self.confluence_zones.clear()
+        self.candlestick_patterns.clear()
         self.current_bar = 0
         self.dominant_trend = None
         self.current_dominant_swing = None
+        
+        # Reset confluence engine
+        if self.confluence_engine:
+            self.confluence_engine.reset()
+    
+    def _serialize_abc_pattern(self, pattern: ABCPattern) -> Dict:
+        """Serialize ABC pattern for confluence analysis."""
+        return {
+            'wave_a': {
+                'start_price': pattern.wave_a.start_price,
+                'end_price': pattern.wave_a.end_price,
+                'direction': pattern.wave_a.direction,
+                'points': pattern.wave_a.points
+            },
+            'wave_b': {
+                'start_price': pattern.wave_b.start_price,
+                'end_price': pattern.wave_b.end_price,
+                'direction': pattern.wave_b.direction,
+                'points': pattern.wave_b.points
+            },
+            'wave_c': {
+                'start_price': pattern.wave_c.start_price,
+                'end_price': pattern.wave_c.end_price,
+                'direction': pattern.wave_c.direction,
+                'points': pattern.wave_c.points
+            },
+            'pattern_type': pattern.pattern_type,
+            'is_complete': pattern.is_complete,
+            'fibonacci_confluence': pattern.fibonacci_confluence
+        }
     
     def detect_abc_patterns(self, df: pd.DataFrame, current_index: int) -> List[ABCPattern]:
         """

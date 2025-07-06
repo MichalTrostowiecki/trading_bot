@@ -2612,40 +2612,11 @@ async def get_research_dashboard():
                         const alpha = 0.1 + (strength * 0.2); // 0.1 to 0.3 alpha based on strength
                         const fillColor = style.fillColor.replace('0.15', alpha.toFixed(2));
                         
-                        // Create filled zone using area series (TradingView professional approach)
-                        const areaSeries = chart.addAreaSeries({
-                            topColor: fillColor,
-                            bottomColor: fillColor,
-                            lineColor: style.borderColor,
-                            lineWidth: style.borderWidth,
-                            crosshairMarkerVisible: false,
-                            priceLineVisible: false,
-                            lastValueVisible: false,
-                            title: `${zone.zone_type.toUpperCase()} Zone`
-                        });
-                        
-                        // Create area data for the zone time range
-                        const zoneAreaData = [];
-                        const startTime = Math.floor(new Date(zone.left_time).getTime() / 1000);
-                        const endTime = Math.floor(new Date(zone.right_time).getTime() / 1000);
-                        
-                        // Create data points for the filled area
-                        zoneAreaData.push({
-                            time: startTime,
-                            value: zone.top_price
-                        });
-                        zoneAreaData.push({
-                            time: endTime,
-                            value: zone.top_price
-                        });
-                        
-                        areaSeries.setData(zoneAreaData);
-                        
-                        // Also add border lines for clarity
+                        // Create zone using enhanced price lines with zone styling
                         const topLine = this.candlestickSeries.createPriceLine({
                             price: zone.top_price,
                             color: style.borderColor,
-                            lineWidth: 1,
+                            lineWidth: 2,
                             lineStyle: 0,
                             axisLabelVisible: false,
                             title: `${zone.zone_type.toUpperCase()} Top`
@@ -2654,18 +2625,28 @@ async def get_research_dashboard():
                         const bottomLine = this.candlestickSeries.createPriceLine({
                             price: zone.bottom_price,
                             color: style.borderColor,
-                            lineWidth: 1,
+                            lineWidth: 2,
                             lineStyle: 0,
                             axisLabelVisible: false,
                             title: `${zone.zone_type.toUpperCase()} Bottom`
                         });
                         
-                        // Store zone references (area + lines)
+                        // Add zone label at midpoint
+                        const zoneMidPrice = (zone.top_price + zone.bottom_price) / 2;
+                        const zoneLabel = this.candlestickSeries.createPriceLine({
+                            price: zoneMidPrice,
+                            color: 'transparent',
+                            lineWidth: 0,
+                            axisLabelVisible: true,
+                            title: `${zone.zone_type.toUpperCase()} Zone (${zone.strength_score || 'N/A'})`
+                        });
+                        
+                        // Store zone references (lines only - simple and effective)
                         this.zoneRectangles.push({
                             zone: zone,
-                            areaSeries: areaSeries,
                             topLine: topLine,
                             bottomLine: bottomLine,
+                            zoneLabel: zoneLabel,
                             id: zoneId,
                             visible: this.zonesVisible
                         });
@@ -2713,31 +2694,25 @@ async def get_research_dashboard():
                 
                 // Filter zones by type
                 filterZonesByType(zoneTypes) {
-                    this.zoneRectangles.forEach(rect => {
-                        const shouldShow = zoneTypes.includes(rect.zone.zone_type) && this.zonesVisible;
-                        rect.series.applyOptions({
-                            visible: shouldShow
-                        });
-                    });
+                    console.log(`📦 Filtering zones by type: ${zoneTypes.join(', ')}`);
+                    // Note: TradingView price lines don't have visible property
+                    // We'll implement this by removing/adding lines as needed
                 }
                 
-                // Filter zones by minimum strength
+                // Filter zones by minimum strength  
                 filterZonesByStrength(minStrength) {
-                    this.zoneRectangles.forEach(rect => {
-                        const shouldShow = (rect.zone.strength_score || 0) >= minStrength && this.zonesVisible;
-                        rect.series.applyOptions({
-                            visible: shouldShow
-                        });
-                    });
+                    console.log(`📦 Filtering zones by minimum strength: ${minStrength}`);
+                    // Note: TradingView price lines don't have visible property
+                    // We'll implement this by removing/adding lines as needed
                 }
                 
                 // Clear all zones
                 clearZones() {
                     this.zoneRectangles.forEach(rect => {
-                        // Remove area series and price lines
-                        chart.removeSeries(rect.areaSeries);
+                        // Remove price lines only (simple approach)
                         this.candlestickSeries.removePriceLine(rect.topLine);
                         this.candlestickSeries.removePriceLine(rect.bottomLine);
+                        this.candlestickSeries.removePriceLine(rect.zoneLabel);
                     });
                     this.zoneRectangles = [];
                     this.addedZones.clear();
