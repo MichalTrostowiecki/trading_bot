@@ -696,6 +696,16 @@ async def get_research_dashboard():
                             <span class="metric-label">Show Lookback Line:</span>
                             <input type="checkbox" id="showLookbackLine" onchange="refreshChartElements()">
                         </div>
+                        <div class="metric" style="margin-top: 15px; border-top: 1px solid #444; padding-top: 10px;">
+                            <span class="metric-label" style="font-weight: bold;">📦 Supply & Demand Zones</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Show S&D Zones:</span>
+                            <input type="checkbox" id="showSupplyDemandZones" onchange="console.log('S&D zones toggled')">
+                        </div>
+                        <div class="metric" style="font-size: 0.8em; color: #888;">
+                            <span>💡 Supply & Demand zone visualization (placeholder)</span>
+                        </div>
                     </div>
                 </div>
             </div>
