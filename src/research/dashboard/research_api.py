@@ -701,10 +701,10 @@ async def get_research_dashboard():
                         </div>
                         <div class="metric">
                             <span class="metric-label">Show S&D Zones:</span>
-                            <input type="checkbox" id="showSupplyDemandZones" onchange="console.log('S&D zones toggled')">
+                            <input type="checkbox" id="showSupplyDemandZones" onchange="toggleSupplyDemandZones()">
                         </div>
                         <div class="metric" style="font-size: 0.8em; color: #888;">
-                            <span>💡 Supply & Demand zone visualization (placeholder)</span>
+                            <span>📦 Toggle to load and display S&D zones</span>
                         </div>
                     </div>
                 </div>
@@ -2121,6 +2121,7 @@ async def get_research_dashboard():
                 fibonacciManager = new FibonacciLevelManager(candlestickSeries);
                 abcPatternManager = new ABCPatternManager(candlestickSeries);
                 lookbackManager = new LookbackIndicatorManager();
+                supplyDemandManager = new SupplyDemandZoneManager(candlestickSeries);
                 
                 // Initialize professional tools system
                 selectTool('cursor');
@@ -2563,8 +2564,175 @@ async def get_research_dashboard():
                 }
             }
             
+            // ✅ SUPPLY & DEMAND ZONE MANAGER
+            class SupplyDemandZoneManager {
+                constructor(candlestickSeries) {
+                    this.candlestickSeries = candlestickSeries;
+                    this.zoneRectangles = [];
+                    this.addedZones = new Set();
+                    this.zonesVisible = true;
+                    
+                    // Zone styling based on type and strength
+                    this.zoneStyles = {
+                        supply: {
+                            borderColor: '#ff4757',
+                            fillColor: 'rgba(255, 71, 87, 0.15)',
+                            borderWidth: 2
+                        },
+                        demand: {
+                            borderColor: '#2ed573',
+                            fillColor: 'rgba(46, 213, 115, 0.15)',
+                            borderWidth: 2
+                        },
+                        continuation: {
+                            borderColor: '#ffa502',
+                            fillColor: 'rgba(255, 165, 2, 0.15)',
+                            borderWidth: 2
+                        }
+                    };
+                    
+                    console.log('📦 SupplyDemandZoneManager initialized');
+                }
+                
+                // Add individual zone rectangle to chart
+                addZone(zone) {
+                    try {
+                        const zoneId = this.getZoneId(zone);
+                        
+                        // Check if zone already added
+                        if (this.addedZones.has(zoneId)) {
+                            return;
+                        }
+                        
+                        // Get zone style based on type
+                        const style = this.zoneStyles[zone.zone_type] || this.zoneStyles.supply;
+                        
+                        // Adjust opacity based on zone strength
+                        const strength = zone.strength_score || 0.5;
+                        const alpha = 0.1 + (strength * 0.2); // 0.1 to 0.3 alpha based on strength
+                        const fillColor = style.fillColor.replace('0.15', alpha.toFixed(2));
+                        
+                        // Create rectangle series for the zone
+                        const rectangleSeries = chart.addRectangleSeries();
+                        
+                        const rectangleData = [{
+                            time: Math.floor(new Date(zone.left_time).getTime() / 1000),
+                            value: zone.bottom_price,
+                            time2: Math.floor(new Date(zone.right_time).getTime() / 1000),
+                            value2: zone.top_price
+                        }];
+                        
+                        rectangleSeries.setData(rectangleData);
+                        rectangleSeries.applyOptions({
+                            fillColor: fillColor,
+                            borderColor: style.borderColor,
+                            borderWidth: style.borderWidth,
+                            visible: this.zonesVisible
+                        });
+                        
+                        // Store zone rectangle reference
+                        this.zoneRectangles.push({
+                            zone: zone,
+                            series: rectangleSeries,
+                            id: zoneId
+                        });
+                        
+                        this.addedZones.add(zoneId);
+                        
+                        console.log(`📦 Added ${zone.zone_type} zone: ${zone.top_price}-${zone.bottom_price}`);
+                        
+                    } catch (error) {
+                        console.error('❌ Error adding S&D zone:', error);
+                    }
+                }
+                
+                // Load multiple zones at once
+                loadAllZones(zones) {
+                    console.log(`📦 Loading ${zones.length} S&D zones...`);
+                    
+                    // Clear existing zones first
+                    this.clearZones();
+                    
+                    // Add each zone
+                    zones.forEach(zone => {
+                        this.addZone(zone);
+                    });
+                    
+                    console.log(`✅ Loaded ${this.zoneRectangles.length} S&D zones`);
+                }
+                
+                // Toggle zone visibility
+                toggleZoneVisibility() {
+                    this.zonesVisible = !this.zonesVisible;
+                    
+                    this.zoneRectangles.forEach(rect => {
+                        rect.series.applyOptions({
+                            visible: this.zonesVisible
+                        });
+                    });
+                    
+                    console.log(`📦 S&D zones ${this.zonesVisible ? 'shown' : 'hidden'}`);
+                }
+                
+                // Filter zones by type
+                filterZonesByType(zoneTypes) {
+                    this.zoneRectangles.forEach(rect => {
+                        const shouldShow = zoneTypes.includes(rect.zone.zone_type) && this.zonesVisible;
+                        rect.series.applyOptions({
+                            visible: shouldShow
+                        });
+                    });
+                }
+                
+                // Filter zones by minimum strength
+                filterZonesByStrength(minStrength) {
+                    this.zoneRectangles.forEach(rect => {
+                        const shouldShow = (rect.zone.strength_score || 0) >= minStrength && this.zonesVisible;
+                        rect.series.applyOptions({
+                            visible: shouldShow
+                        });
+                    });
+                }
+                
+                // Clear all zones
+                clearZones() {
+                    this.zoneRectangles.forEach(rect => {
+                        chart.removeSeries(rect.series);
+                    });
+                    this.zoneRectangles = [];
+                    this.addedZones.clear();
+                    
+                    console.log('🧹 Cleared all S&D zones');
+                }
+                
+                // Generate unique zone ID
+                getZoneId(zone) {
+                    return zone.id || `${zone.symbol}_${zone.timeframe}_${zone.zone_type}_${zone.left_time}_${zone.top_price}_${zone.bottom_price}`;
+                }
+                
+                // Get zone statistics
+                getZoneStats() {
+                    const stats = {
+                        total: this.zoneRectangles.length,
+                        supply: 0,
+                        demand: 0,
+                        continuation: 0,
+                        visible: this.zoneRectangles.filter(rect => rect.series.options().visible !== false).length
+                    };
+                    
+                    this.zoneRectangles.forEach(rect => {
+                        stats[rect.zone.zone_type]++;
+                    });
+                    
+                    return stats;
+                }
+            }
+            
             // Global lookback indicator manager
             let lookbackManager = null;
+            
+            // Global supply demand zone manager
+            let supplyDemandManager = null;
 
             // Add current position indicator to show backtesting progress
             function updateCurrentPositionIndicator(position) {
@@ -3125,6 +3293,150 @@ async def get_research_dashboard():
                 }
                 
                 console.log('✅ Chart elements refresh initiated');
+            }
+            
+            // Supply & Demand Zone Control Functions
+            function toggleSupplyDemandZones() {
+                console.log('📦 Toggling S&D zones visibility...');
+                
+                if (!supplyDemandManager) {
+                    console.warn('Supply & Demand manager not initialized');
+                    return;
+                }
+                
+                const showZones = document.getElementById('showSupplyDemandZones').checked;
+                
+                if (showZones) {
+                    // Load zones if checkbox is checked and no zones loaded
+                    if (supplyDemandManager.zoneRectangles.length === 0) {
+                        loadSupplyDemandZones();
+                    } else {
+                        // Just show existing zones
+                        supplyDemandManager.zonesVisible = true;
+                        supplyDemandManager.zoneRectangles.forEach(rect => {
+                            rect.series.applyOptions({ visible: true });
+                        });
+                    }
+                } else {
+                    // Hide zones
+                    supplyDemandManager.zonesVisible = false;
+                    supplyDemandManager.zoneRectangles.forEach(rect => {
+                        rect.series.applyOptions({ visible: false });
+                    });
+                }
+                
+                console.log(`✅ S&D zones ${showZones ? 'shown' : 'hidden'}`);
+            }
+            
+            async function loadSupplyDemandZones() {
+                console.log('📦 Loading Supply & Demand zones...');
+                
+                try {
+                    // Get current form values
+                    const symbol = document.getElementById('symbolSelect').value;
+                    const timeframe = document.getElementById('timeframeSelect').value;
+                    
+                    if (!symbol || !timeframe) {
+                        console.warn('Symbol or timeframe not selected');
+                        updateStatus('⚠️ Please select symbol and timeframe first');
+                        return;
+                    }
+                    
+                    // Show loading status
+                    updateStatus('📦 Loading supply & demand zones...');
+                    
+                    // Call the zones API (this endpoint may not exist yet, but we'll prepare for it)
+                    const url = `/api/supply-demand/zones?symbol=${symbol}&timeframe=${timeframe}&limit=100`;
+                    const response = await fetch(url);
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        
+                        if (result.success && result.zones) {
+                            console.log(`📦 Loaded ${result.zones.length} S&D zones from API`);
+                            
+                            // Load zones into the manager
+                            if (supplyDemandManager) {
+                                supplyDemandManager.loadAllZones(result.zones);
+                                updateStatus(`✅ Loaded ${result.zones.length} supply & demand zones`);
+                            }
+                        } else {
+                            console.warn('No zones returned from API');
+                            updateStatus('⚠️ No S&D zones found for current symbol/timeframe');
+                        }
+                    } else {
+                        // API endpoint doesn't exist yet - create demo zones
+                        console.log('📦 API not available, creating demo zones...');
+                        createDemoSupplyDemandZones();
+                    }
+                } catch (error) {
+                    console.warn('S&D API not available, creating demo zones:', error);
+                    createDemoSupplyDemandZones();
+                }
+            }
+            
+            function createDemoSupplyDemandZones() {
+                console.log('📦 Creating demo S&D zones...');
+                
+                // Create some demo zones for testing
+                if (!marketData || marketData.length === 0) {
+                    console.warn('No market data available for demo zones');
+                    updateStatus('⚠️ Load chart data first to see demo zones');
+                    return;
+                }
+                
+                const demoZones = [];
+                const dataLength = marketData.length;
+                
+                // Create a few demo supply zones
+                for (let i = 0; i < 3; i++) {
+                    const startIndex = Math.floor(dataLength * 0.2) + (i * 100);
+                    if (startIndex >= dataLength) break;
+                    
+                    const startBar = marketData[startIndex];
+                    const endBar = marketData[Math.min(startIndex + 20, dataLength - 1)];
+                    
+                    demoZones.push({
+                        id: `demo_supply_${i}`,
+                        symbol: 'DEMO',
+                        timeframe: 'M1',
+                        zone_type: 'supply',
+                        top_price: startBar.high + (startBar.high * 0.001),
+                        bottom_price: startBar.high - (startBar.high * 0.001),
+                        left_time: startBar.timestamp,
+                        right_time: endBar.timestamp,
+                        strength_score: 0.7 + (i * 0.1)
+                    });
+                }
+                
+                // Create a few demo demand zones
+                for (let i = 0; i < 3; i++) {
+                    const startIndex = Math.floor(dataLength * 0.4) + (i * 120);
+                    if (startIndex >= dataLength) break;
+                    
+                    const startBar = marketData[startIndex];
+                    const endBar = marketData[Math.min(startIndex + 25, dataLength - 1)];
+                    
+                    demoZones.push({
+                        id: `demo_demand_${i}`,
+                        symbol: 'DEMO',
+                        timeframe: 'M1',
+                        zone_type: 'demand',
+                        top_price: startBar.low + (startBar.low * 0.001),
+                        bottom_price: startBar.low - (startBar.low * 0.001),
+                        left_time: startBar.timestamp,
+                        right_time: endBar.timestamp,
+                        strength_score: 0.6 + (i * 0.15)
+                    });
+                }
+                
+                if (supplyDemandManager && demoZones.length > 0) {
+                    supplyDemandManager.loadAllZones(demoZones);
+                    updateStatus(`✅ Created ${demoZones.length} demo S&D zones`);
+                    console.log(`📦 Created ${demoZones.length} demo zones`);
+                } else {
+                    updateStatus('❌ Failed to create demo zones');
+                }
             }
             
             // Load all strategy elements from the database (bypassing broken JSON endpoints)
