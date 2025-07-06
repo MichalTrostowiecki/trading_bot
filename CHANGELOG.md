@@ -5,6 +5,34 @@ All notable changes to the Fibonacci Trading Bot project will be documented in t
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2025-07-06
+
+### Added
+- **Supply & Demand Zone Visualization**: Complete zone management system with price line boundaries
+- SupplyDemandZoneManager JavaScript class for TradingView integration
+- Zone loading and management with professional styling (red/green zone type colors)
+- Strength-based visual hierarchy with dynamic opacity
+- UI controls integration with toggle checkbox and zone filtering functions
+- Connection to existing Supply & Demand API endpoints
+
+### Fixed
+- Multiple zone visualization attempts to achieve proper rectangular zones:
+  - Replaced problematic histogram series (created vertical bars)
+  - Replaced area series approach (created vertical walls)
+  - Implemented simplified price line boundaries for zone top/bottom
+- Zone management system with proper line removal and cleanup
+- Updated filter methods to handle TradingView price line limitations
+
+### Technical Challenge Identified
+- **TradingView Lightweight Charts Limitation**: Free version lacks native rectangle support
+- Current implementation shows functional zone boundaries but lacks filled rectangular areas
+- Future enhancement: Drawing primitives plugin for proper rectangle visualization
+
+### Documentation
+- Updated CLAUDE.md with current session progress and S&D zone status
+- Enhanced README.md with project status and testing framework information
+- Updated task tracker with partial S&D zone completion status
+
 ## [2.7.0] - 2025-07-05
 
 ### Added
