@@ -172,6 +172,83 @@ The dashboard includes Elliott Wave compliant ABC correction pattern detection, 
 4. Observe dotted lines showing wave structure
 5. Use patterns for confluence analysis with Fibonacci levels
 
+## 🎯 Enhanced Signal Generation & Performance Analytics
+
+### Overview
+The dashboard includes a comprehensive enhanced signal generation system with real-time performance tracking and analytics designed for ML/AI development. All enhanced signals are automatically tracked from generation to completion.
+
+### Enhanced Signal Features
+- **Pattern Confirmation**: Bar pattern recognition at Fibonacci levels (bullish/bearish engulfing, hammer, pin bar)
+- **Quality Scoring**: Confluence-based scoring system (0-100 points) with fibonacci, pattern, volume, and swing factors
+- **Signal Classification**: Weak/Moderate/Strong quality assessment with automatic filtering
+- **Real-time Visualization**: Distinctive markers and horizontal lines showing entry, stop loss, and take profit levels
+
+### Signal Performance Analytics Panel
+Located in the sidebar, this panel provides comprehensive performance tracking:
+
+#### Real-time Statistics
+- **Active Signals**: Currently tracking signals awaiting resolution
+- **Completed Signals**: Total signals that reached target or stop loss
+- **Win Rate**: Percentage of signals that hit take profit vs stop loss
+- **Average Bars**: Average time to resolution in bars
+
+#### Performance Controls
+- **Refresh Analytics**: Update comprehensive analytics data
+- **Export Performance**: Download complete performance data as CSV
+
+### Signal Analytics Dashboard
+Detailed analytics include:
+
+#### Overall Performance
+- Total signals generated
+- Overall win rate across all signals
+- Active vs completed signal counts
+
+#### Quality Breakdown
+Performance analysis by signal quality levels:
+- **Weak Signals** (0-40%): Lower confluence scores, typically filtered out
+- **Moderate Signals** (40-70%): Acceptable quality with reasonable win rates
+- **Strong Signals** (70-100%): High-quality signals with excellent performance
+
+#### Pattern Rankings
+Top-performing patterns with:
+- Win rates by pattern type and strength
+- Average P&L per pattern
+- Confluence score averages
+- Total signal counts for statistical significance
+
+#### Confluence Score Analysis
+Performance breakdown by score ranges:
+- **0-40**: Low-quality signals with poor performance
+- **40-60**: Moderate quality with improving win rates
+- **60-80**: Good quality with strong performance
+- **80-100**: Excellent quality with highest win rates
+
+#### ML Readiness Indicators
+- Feature count available for ML training
+- Dataset size and quality metrics
+- Readiness status for machine learning models
+
+### API Integration
+The signal performance system provides dedicated endpoints:
+
+- **GET /api/signals/analytics**: Comprehensive analytics for ML/AI development
+- **GET /api/signals/performance/export**: Export performance data for analysis
+- **GET /api/signals/performance/real-time**: Real-time statistics
+
+### Data Export Capabilities
+- **CSV Export**: Complete signal performance datasets with all metrics
+- **ML Features**: Pre-engineered features ready for machine learning models
+- **Pattern Statistics**: Aggregated performance by pattern type and strength
+- **Performance Tracking**: Individual signal journeys from entry to exit
+
+### Integration with Strategy
+The enhanced signal system is fully integrated with the existing Fibonacci strategy:
+- Automatic signal tracking when enhanced signals are generated
+- Real-time performance updates during chart replay
+- Quality-based filtering to improve signal selection
+- Comprehensive analytics for strategy optimization
+
 ## 📈 Data Import
 
 ### Importing MT4 Data

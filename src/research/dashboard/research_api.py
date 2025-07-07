@@ -19,6 +19,7 @@ from src.data.database import get_database_manager, initialize_database
 from src.data.importers import MT4DataImporter, MT5DataImporter
 from src.monitoring import get_logger
 from src.strategy.backtesting_engine import BacktestingEngine
+from sqlalchemy import text
 
 logger = get_logger("research_api")
 
@@ -311,6 +312,24 @@ async def get_research_dashboard():
                 background: #2a2e39;
                 text-transform: uppercase;
                 letter-spacing: 0.5px;
+                cursor: pointer;
+                user-select: none;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .sidebar-section h3:hover {
+                background: #363b47;
+            }
+            .sidebar-section .collapse-icon {
+                font-size: 10px;
+                transition: transform 0.2s;
+            }
+            .sidebar-section.collapsed .collapse-icon {
+                transform: rotate(-90deg);
+            }
+            .sidebar-section.collapsed .section-content {
+                display: none;
             }
             .sidebar-section > div:not(h3) {
                 padding: 12px 16px;
@@ -550,8 +569,8 @@ async def get_research_dashboard():
             
             <div class="sidebar">
                 <div class="sidebar-section">
-                    <h3>📊 Data Inspector</h3>
-                    <div>
+                    <h3 onclick="toggleSection(this)">📊 Data Inspector <span class="collapse-icon">▼</span></h3>
+                    <div class="section-content">
                         <div class="metric">
                             <span class="metric-label">Current Bar:</span>
                             <span class="metric-value" id="currentBar">-</span>
@@ -584,8 +603,8 @@ async def get_research_dashboard():
                 </div>
                 
                 <div class="sidebar-section">
-                    <h3>🎯 Market Bias</h3>
-                    <div id="marketBiasPanel">
+                    <h3 onclick="toggleSection(this)">🎯 Market Bias <span class="collapse-icon">▼</span></h3>
+                    <div class="section-content" id="marketBiasPanel">
                         <div class="metric">
                             <span class="metric-label">Sentiment:</span>
                             <span class="metric-value" id="marketSentiment">NEUTRAL</span>
@@ -608,8 +627,8 @@ async def get_research_dashboard():
                 </div>
                 
                 <div class="sidebar-section">
-                    <h3>🐛 Debug Panel</h3>
-                    <div id="debugPanel">
+                    <h3 onclick="toggleSection(this)">🐛 Debug Panel <span class="collapse-icon">▼</span></h3>
+                    <div class="section-content" id="debugPanel">
                         <div class="metric">
                             <span class="metric-label">Fractals:</span>
                             <span class="metric-value" id="fractalCount">0</span>
@@ -623,6 +642,10 @@ async def get_research_dashboard():
                             <span class="metric-value" id="signalCount">0</span>
                         </div>
                         <div class="metric">
+                            <span class="metric-label">Enhanced Signals:</span>
+                            <span class="metric-value" id="enhancedSignalCount">0</span>
+                        </div>
+                        <div class="metric">
                             <span class="metric-label">ABC Patterns:</span>
                             <span class="metric-value" id="abcPatternCount">0</span>
                         </div>
@@ -633,9 +656,9 @@ async def get_research_dashboard():
                     </div>
                 </div>
                 
-                <div class="sidebar-section">
-                    <h3>📈 Performance</h3>
-                    <div id="performancePanel">
+                <div class="sidebar-section collapsed">
+                    <h3 onclick="toggleSection(this)">📈 Performance <span class="collapse-icon">▼</span></h3>
+                    <div class="section-content" id="performancePanel">
                         <div class="metric">
                             <span class="metric-label">Total Trades:</span>
                             <span class="metric-value" id="totalTrades">0</span>
@@ -656,8 +679,8 @@ async def get_research_dashboard():
                 </div>
                 
                 <div class="sidebar-section">
-                    <h3>⚙️ Settings</h3>
-                    <div id="settingsPanel">
+                    <h3 onclick="toggleSection(this)">⚙️ Settings <span class="collapse-icon">▼</span></h3>
+                    <div class="section-content" id="settingsPanel">
                         <div class="metric">
                             <span class="metric-label">Show Fractals:</span>
                             <input type="checkbox" id="showFractals" checked onchange="refreshChartElements()">
@@ -677,6 +700,10 @@ async def get_research_dashboard():
                         <div class="metric">
                             <span class="metric-label">Show Signals:</span>
                             <input type="checkbox" id="showSignals" onchange="refreshChartElements()">
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Show Enhanced Signals:</span>
+                            <input type="checkbox" id="showEnhancedSignals" checked onchange="refreshChartElements()">
                         </div>
                         <div class="metric">
                             <span class="metric-label">Fractal Periods:</span>
@@ -705,6 +732,126 @@ async def get_research_dashboard():
                         </div>
                         <div class="metric" style="font-size: 0.8em; color: #888;">
                             <span>📦 Toggle to load and display S&D zones</span>
+                        </div>
+                        
+                        <!-- Zone Debug Panel -->
+                        <div id="zoneDebugPanel" style="margin-top: 10px; padding: 8px; background: rgba(0,50,100,0.3); border-radius: 4px; border: 1px solid #444; display: none;">
+                            <div style="font-weight: bold; color: #4fc3f7; margin-bottom: 5px;">🔍 Zone Debug Info</div>
+                            <div class="metric" style="font-size: 0.75em;">
+                                <span class="metric-label">Current Bar:</span>
+                                <span class="metric-value" id="debugCurrentBar">-</span>
+                            </div>
+                            <div class="metric" style="font-size: 0.75em;">
+                                <span class="metric-label">Current Time:</span>
+                                <span class="metric-value" id="debugCurrentTime">-</span>
+                            </div>
+                            <div class="metric" style="font-size: 0.75em;">
+                                <span class="metric-label">Chart Date Range:</span>
+                                <span class="metric-value" id="debugChartDateRange">-</span>
+                            </div>
+                            <div class="metric" style="font-size: 0.75em;">
+                                <span class="metric-label">Chart Price Range:</span>
+                                <span class="metric-value" id="debugChartPriceRange">-</span>
+                            </div>
+                            <div class="metric" style="font-size: 0.75em;">
+                                <span class="metric-label">Zones Loaded:</span>
+                                <span class="metric-value" id="debugZonesLoaded">0</span>
+                            </div>
+                            <div class="metric" style="font-size: 0.75em;">
+                                <span class="metric-label">Zones Visible:</span>
+                                <span class="metric-value" id="debugZonesVisible">0</span>
+                            </div>
+                            <div class="metric" style="font-size: 0.75em;">
+                                <span class="metric-label">Zone Date Range:</span>
+                                <span class="metric-value" id="debugZoneDateRange">-</span>
+                            </div>
+                            <div class="metric" style="font-size: 0.75em;">
+                                <span class="metric-label">Zone Price Range:</span>
+                                <span class="metric-value" id="debugZonePriceRange">-</span>
+                            </div>
+                            <div class="metric" style="font-size: 0.75em;">
+                                <span class="metric-label">Next Zone At:</span>
+                                <span class="metric-value" id="debugNextZone">-</span>
+                            </div>
+                            <div class="metric" style="font-size: 0.75em; color: #ff6b6b;">
+                                <span class="metric-label">⚠️ Date/Price Mismatch:</span>
+                                <span class="metric-value" id="debugMismatchWarning">-</span>
+                            </div>
+                            <div id="debugZoneEvents" style="margin-top: 5px; max-height: 60px; overflow-y: auto; font-size: 0.7em; color: #aaa;"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Enhanced Signals Panel -->
+                <div class="sidebar-section" id="enhancedSignalsSection">
+                    <h3 onclick="toggleSection('enhancedSignalsSection')">
+                        🎯 Enhanced Signals 
+                        <span class="collapse-icon">▼</span>
+                    </h3>
+                    <div class="section-content" id="enhancedSignalsPanel">
+                        <div class="metric" style="margin-bottom: 10px;">
+                            <span class="metric-label">Live Signals:</span>
+                            <span class="metric-value" id="liveEnhancedSignalCount">0</span>
+                        </div>
+                        <div id="enhancedSignalsList" style="max-height: 300px; overflow-y: auto; border: 1px solid #444; border-radius: 4px; background: rgba(0,0,0,0.3);">
+                            <div style="color: #888; font-size: 0.9em; text-align: center; padding: 20px;">
+                                No enhanced signals detected yet.<br>
+                                Load data and navigate to see signals with pattern confirmation.
+                            </div>
+                        </div>
+                        <div class="metric" style="margin-top: 10px; border-top: 1px solid #444; padding-top: 10px;">
+                            <button onclick="clearAllEnhancedSignals()" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 0.8em;">
+                                Clear All
+                            </button>
+                            <button onclick="exportEnhancedSignals()" style="background: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-left: 5px; font-size: 0.8em;">
+                                Export CSV
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Signal Performance Analytics Panel -->
+                <div class="sidebar-section" id="signalPerformanceSection">
+                    <h3 onclick="toggleSection('signalPerformanceSection')">
+                        📊 Signal Analytics 
+                        <span class="collapse-icon">▼</span>
+                    </h3>
+                    <div class="section-content" id="signalPerformancePanel">
+                        <div class="metrics-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+                            <div class="metric">
+                                <span class="metric-label">Active:</span>
+                                <span class="metric-value" id="activeSignalsCount">0</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Completed:</span>
+                                <span class="metric-value" id="completedSignalsCount">0</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Win Rate:</span>
+                                <span class="metric-value" id="signalWinRate">0%</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Avg Bars:</span>
+                                <span class="metric-value" id="avgBarsToResolution">0</span>
+                            </div>
+                        </div>
+                        
+                        <div class="performance-controls" style="margin-bottom: 10px;">
+                            <button onclick="refreshSignalAnalytics()" style="background: #4a90e2; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 0.8em; width: 100%;">
+                                Refresh Analytics
+                            </button>
+                        </div>
+                        
+                        <div id="signalAnalyticsDetails" style="max-height: 200px; overflow-y: auto; border: 1px solid #444; border-radius: 4px; background: rgba(0,0,0,0.3); padding: 8px; font-size: 0.8em;">
+                            <div style="color: #888; text-align: center; padding: 20px;">
+                                Generate signals to see performance analytics
+                            </div>
+                        </div>
+                        
+                        <div class="export-controls" style="margin-top: 10px; border-top: 1px solid #444; padding-top: 10px;">
+                            <button onclick="exportSignalPerformance()" style="background: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 0.8em; width: 100%;">
+                                Export Performance Data
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -787,6 +934,9 @@ async def get_research_dashboard():
             let fibonacciSeries = null;
             let signalSeries = null;
             let allMarkers = []; // Global array to store all markers
+            window.allMarkers = allMarkers; // Make globally accessible for batcher
+            let enhancedSignalsData = []; // Global array to store enhanced signals for panel
+            let enhancedSignalLines = []; // Global array to store price line references
             
             // User interaction tracking
             let userHasManuallyPanned = false;
@@ -848,6 +998,9 @@ async def get_research_dashboard():
             let accumulatedABCPatterns = [];
             let accumulatedDominantSwing = null;
             
+            // Make accumulated data globally accessible for batcher
+            window.accumulatedFractals = accumulatedFractals;
+            
             // ✅ PROPER TRADINGVIEW MARKER MANAGEMENT
             class FractalMarkerManager {
                 constructor(candlestickSeries) {
@@ -898,10 +1051,36 @@ async def get_research_dashboard():
                 }
                 
                 updateChart() {
-                    // ✅ CRITICAL: Always use complete markers array
-                    const allMarkers = [...this.fractalMarkers, ...this.otherMarkers];
-                    this.series.setMarkers(allMarkers);
-                    console.log(`🎯 Applied ${allMarkers.length} total markers (${this.fractalMarkers.length} fractals)`);
+                    // ✅ RESTORED: Direct marker updates for fractals (they should stay visible continuously)
+                    // Fractals are static once detected and don't cause flashing like dynamic signals
+                    
+                    // Combine fractal markers with any other accumulated markers from global array
+                    const allCurrentMarkers = [...this.fractalMarkers];
+                    
+                    // Add any other markers from global allMarkers that aren't fractals
+                    if (window.allMarkers) {
+                        const nonFractalMarkers = window.allMarkers.filter(marker => 
+                            !marker.id || !marker.id.startsWith('fractal-')
+                        );
+                        allCurrentMarkers.push(...nonFractalMarkers);
+                    }
+                    
+                    // Remove duplicates by time and type
+                    const uniqueMarkers = [];
+                    const seen = new Set();
+                    allCurrentMarkers.forEach(marker => {
+                        const key = `${marker.time}_${marker.shape}_${marker.color}`;
+                        if (!seen.has(key)) {
+                            seen.add(key);
+                            uniqueMarkers.push(marker);
+                        }
+                    });
+                    
+                    // Sort and set markers immediately
+                    uniqueMarkers.sort((a, b) => a.time - b.time);
+                    this.series.setMarkers(uniqueMarkers);
+                    
+                    console.log(`📍 FractalMarkerManager: Direct update with ${uniqueMarkers.length} total markers (${this.fractalMarkers.length} fractals)`);
                 }
             }
             
@@ -1706,10 +1885,22 @@ async def get_research_dashboard():
 
                 // Generate unique ID for pattern to prevent duplicates
                 getPatternId(pattern) {
+                    // 🚨 DEFENSIVE: Check if pattern and waves exist
+                    if (!pattern || !pattern.wave_a || !pattern.wave_b || !pattern.wave_c) {
+                        console.warn('Invalid ABC pattern structure:', pattern);
+                        return `invalid_pattern_${Date.now()}_${Math.random()}`;
+                    }
+                    
                     // Create unique ID based on wave timestamps and prices
                     const waveA = pattern.wave_a;
                     const waveB = pattern.wave_b;
                     const waveC = pattern.wave_c;
+                    
+                    // 🚨 DEFENSIVE: Check if timestamps exist
+                    if (!waveA.start_timestamp || !waveA.end_timestamp || !waveB.end_timestamp || !waveC.start_timestamp) {
+                        console.warn('Missing timestamps in ABC pattern waves:', {waveA, waveB, waveC});
+                        return `pattern_${waveA.start_price || 0}_${waveB.end_price || 0}_${waveC.end_price || 0}_${Date.now()}`;
+                    }
                     
                     return `${waveA.start_timestamp}_${waveA.end_timestamp}_${waveB.end_timestamp}_${waveC.start_timestamp}`;
                 }
@@ -1772,104 +1963,430 @@ async def get_research_dashboard():
                 }
             }
             
-            // Handle backtest updates from strategy engine
+            // ✅ CHART UPDATE BATCHER - Eliminates flashing by batching all updates
+            class ChartUpdateBatcher {
+                constructor() {
+                    this.pendingUpdates = {
+                        fractals: [],
+                        swings: [],
+                        fibonacci: null,
+                        abc_patterns: [],
+                        signals: [],
+                        enhanced_signals: [],
+                        markers: false,
+                        debug_panel: {}
+                    };
+                    this.batchTimeout = null;
+                    this.isProcessing = false;
+                }
+                
+                // Add fractal update to batch
+                addFractal(fractal) {
+                    if (!fractal || this.pendingUpdates.fractals.some(f => 
+                        f.timestamp === fractal.timestamp && f.fractal_type === fractal.fractal_type)) {
+                        return; // Skip duplicates
+                    }
+                    this.pendingUpdates.fractals.push(fractal);
+                    this.scheduleBatch();
+                }
+                
+                // Add swing update to batch
+                addSwing(swing) {
+                    if (!swing) return;
+                    this.pendingUpdates.swings.push(swing);
+                    this.scheduleBatch();
+                }
+                
+                // Add fibonacci levels to batch
+                addFibonacci(fibLevels, dominantSwing) {
+                    this.pendingUpdates.fibonacci = { fibLevels, dominantSwing };
+                    this.scheduleBatch();
+                }
+                
+                // Add ABC patterns to batch
+                addABCPatterns(patterns, dominantSwing) {
+                    this.pendingUpdates.abc_patterns = { patterns, dominantSwing };
+                    this.scheduleBatch();
+                }
+                
+                // Add signals to batch
+                addSignals(signals) {
+                    if (!signals || !Array.isArray(signals)) return;
+                    this.pendingUpdates.signals.push(...signals);
+                    this.scheduleBatch();
+                }
+                
+                // Add enhanced signals to batch
+                addEnhancedSignals(signals) {
+                    if (!signals || !Array.isArray(signals)) return;
+                    this.pendingUpdates.enhanced_signals.push(...signals);
+                    this.scheduleBatch();
+                }
+                
+                // Mark that markers need updating
+                markersNeedUpdate() {
+                    this.pendingUpdates.markers = true;
+                    this.scheduleBatch();
+                }
+                
+                // Add debug panel update
+                updateDebugPanel(updates) {
+                    Object.assign(this.pendingUpdates.debug_panel, updates);
+                    this.scheduleBatch();
+                }
+                
+                // Schedule batched update (debounced)
+                scheduleBatch() {
+                    if (this.isProcessing) return;
+                    
+                    if (this.batchTimeout) {
+                        clearTimeout(this.batchTimeout);
+                    }
+                    
+                    this.batchTimeout = setTimeout(() => {
+                        this.processBatch();
+                    }, 16); // ~60fps batching
+                }
+                
+                // Process all pending updates in a single batch
+                processBatch() {
+                    if (this.isProcessing) return;
+                    this.isProcessing = true;
+                    
+                    try {
+                        console.log('🎯 BATCH UPDATE: Processing batched chart updates...', {
+                            fractals: this.pendingUpdates.fractals.length,
+                            swings: this.pendingUpdates.swings.length,
+                            fibonacci: !!this.pendingUpdates.fibonacci,
+                            abc_patterns: !!this.pendingUpdates.abc_patterns.patterns,
+                            signals: this.pendingUpdates.signals.length,
+                            enhanced_signals: this.pendingUpdates.enhanced_signals.length,
+                            markers: this.pendingUpdates.markers
+                        });
+                        
+                        // 1. Process fractals (accumulate and sync)
+                        if (this.pendingUpdates.fractals.length > 0) {
+                            this.pendingUpdates.fractals.forEach(fractal => {
+                                const exists = window.accumulatedFractals.some(f => 
+                                    f.timestamp === fractal.timestamp && f.fractal_type === fractal.fractal_type
+                                );
+                                if (!exists) {
+                                    window.accumulatedFractals.push(fractal);
+                                    // Also sync with the local array reference
+                                    accumulatedFractals.push(fractal);
+                                }
+                            });
+                            console.log(`🔺 Batched: ${this.pendingUpdates.fractals.length} fractals (total: ${window.accumulatedFractals.length})`);
+                            
+                            // Update fractal manager directly
+                            if (fractalManager && document.getElementById('showFractals').checked) {
+                                fractalManager.loadAllFractals(window.accumulatedFractals);
+                            }
+                        }
+                        
+                        // 2. Process swings (accumulate and update)
+                        if (this.pendingUpdates.swings.length > 0) {
+                            this.pendingUpdates.swings.forEach(swing => {
+                                const exists = accumulatedSwings.some(s => 
+                                    s.start_fractal.timestamp === swing.start_fractal.timestamp && 
+                                    s.end_fractal.timestamp === swing.end_fractal.timestamp &&
+                                    s.direction === swing.direction
+                                );
+                                if (!exists) {
+                                    accumulatedSwings.push(swing);
+                                }
+                            });
+                            
+                            // Update swing display once
+                            if (document.getElementById('showSwings').checked && swingLineManager) {
+                                swingLineManager.loadAllSwings(accumulatedSwings);
+                            }
+                            console.log(`📈 Batched: ${this.pendingUpdates.swings.length} swings`);
+                        }
+                        
+                        // 3. Process Fibonacci levels (update once)
+                        if (this.pendingUpdates.fibonacci) {
+                            const { fibLevels, dominantSwing } = this.pendingUpdates.fibonacci;
+                            accumulatedFibonacci = fibLevels;
+                            accumulatedDominantSwing = dominantSwing;
+                            
+                            if (document.getElementById('showFibonacci').checked && fibonacciManager) {
+                                fibonacciManager.updateFibonacciLevels(fibLevels, dominantSwing);
+                            }
+                            console.log(`📐 Batched: Fibonacci levels updated`);
+                        }
+                        
+                        // 4. Process ABC patterns (update once)
+                        if (this.pendingUpdates.abc_patterns.patterns) {
+                            const { patterns, dominantSwing } = this.pendingUpdates.abc_patterns;
+                            accumulatedABCPatterns = patterns;
+                            
+                            if (document.getElementById('showABC') && document.getElementById('showABC').checked && abcPatternManager) {
+                                abcPatternManager.loadAllABCPatterns(patterns, dominantSwing);
+                            }
+                            console.log(`🌊 Batched: ABC patterns updated`);
+                        }
+                        
+                        // 5. Build complete marker collection
+                        let finalMarkers = [];
+                        let shouldUpdateMarkers = false;
+                        
+                        // Add signal markers
+                        if (this.pendingUpdates.signals.length > 0) {
+                            this.pendingUpdates.signals.forEach(signal => {
+                                const marker = {
+                                    time: Math.floor(new Date(signal.timestamp).getTime() / 1000),
+                                    position: signal.signal_type === 'buy' ? 'belowBar' : 'aboveBar',
+                                    color: signal.signal_type === 'buy' ? '#26a69a' : '#ef5350',
+                                    shape: signal.signal_type === 'buy' ? 'arrowUp' : 'arrowDown',
+                                    text: '',
+                                    size: 2
+                                };
+                                
+                                const existingIndex = finalMarkers.findIndex(m => m.time === marker.time);
+                                if (existingIndex === -1) {
+                                    finalMarkers.push(marker);
+                                    shouldUpdateMarkers = true;
+                                }
+                            });
+                            console.log(`📊 Batched: ${this.pendingUpdates.signals.length} signals`);
+                        }
+                        
+                        // Add enhanced signal markers
+                        if (this.pendingUpdates.enhanced_signals.length > 0) {
+                            this.pendingUpdates.enhanced_signals.forEach(signal => {
+                                const marker = {
+                                    time: Math.floor(new Date(signal.timestamp).getTime() / 1000),
+                                    position: signal.signal_type === 'buy' ? 'belowBar' : 'aboveBar',
+                                    color: signal.signal_type === 'buy' ? '#00ff88' : '#ff4444',
+                                    shape: signal.signal_type === 'buy' ? 'arrowUp' : 'arrowDown',
+                                    text: `${signal.quality || 'N/A'}\\n${signal.pattern_type || 'N/A'}\\n${signal.confluence_score ? signal.confluence_score.toFixed(0) : '0'}%`,
+                                    size: 4
+                                };
+                                
+                                const existingIndex = finalMarkers.findIndex(m => 
+                                    m.time === marker.time && m.color === marker.color
+                                );
+                                if (existingIndex === -1) {
+                                    finalMarkers.push(marker);
+                                    shouldUpdateMarkers = true;
+                                }
+                            });
+                            console.log(`⭐ Batched: ${this.pendingUpdates.enhanced_signals.length} enhanced signals`);
+                        }
+                        
+                        // 6. Skip fractal markers - handled directly by FractalMarkerManager
+                        // Fractals are now managed by direct updates for continuous visibility
+                        console.log(`🔺 Batched: Skipping fractals (handled by FractalMarkerManager directly)`);
+                        
+                        // 7. Update global signal markers array only (no direct setMarkers calls)
+                        if (shouldUpdateMarkers) {
+                            // Sort and update global array for signal markers only
+                            finalMarkers.sort((a, b) => a.time - b.time);
+                            
+                            // Update global allMarkers array for signal markers (FractalMarkerManager will combine)
+                            if (window.allMarkers) {
+                                // Remove old signal markers and add new ones
+                                window.allMarkers = window.allMarkers.filter(marker => 
+                                    marker.size !== 2 && marker.size !== 4 // Remove old signals
+                                );
+                                window.allMarkers.push(...finalMarkers);
+                            } else {
+                                window.allMarkers = finalMarkers;
+                            }
+                            
+                            console.log(`🎯 Batched: Updated signal markers in global array (${finalMarkers.length} signals)`);
+                            
+                            // Let FractalMarkerManager handle the actual chart update
+                            if (fractalManager) {
+                                fractalManager.updateChart();
+                            }
+                        }
+                        
+                        // 7. Update debug panel once
+                        if (Object.keys(this.pendingUpdates.debug_panel).length > 0) {
+                            Object.entries(this.pendingUpdates.debug_panel).forEach(([key, value]) => {
+                                const element = document.getElementById(key);
+                                if (element) {
+                                    element.textContent = value;
+                                }
+                            });
+                            console.log(`📊 Batched: Debug panel updated`);
+                        }
+                        
+                        console.log('✅ BATCH UPDATE: Completed - Chart updated with single redraw');
+                        
+                    } catch (error) {
+                        console.error('❌ Error in batch update:', error);
+                    } finally {
+                        // Reset all pending updates
+                        this.pendingUpdates = {
+                            fractals: [],
+                            swings: [],
+                            fibonacci: null,
+                            abc_patterns: [],
+                            signals: [],
+                            enhanced_signals: [],
+                            markers: false,
+                            debug_panel: {}
+                        };
+                        this.isProcessing = false;
+                        this.batchTimeout = null;
+                    }
+                }
+                
+                // Force immediate batch processing
+                flushBatch() {
+                    if (this.batchTimeout) {
+                        clearTimeout(this.batchTimeout);
+                        this.batchTimeout = null;
+                    }
+                    this.processBatch();
+                }
+            }
+            
+            // Global chart update batcher instance
+            let chartUpdateBatcher = null;
+            
+            // ✅ BATCHED UPDATE SYSTEM - Handle backtest updates from strategy engine
             function handleBacktestUpdate(data) {
-                if (!data) return;
+                if (!data || !chartUpdateBatcher) return;
+                
+                console.log('🎯 BATCHED UPDATE: Received update data, processing...');
                 
                 // NOTE: Don't update currentPosition here as it causes position jumps
                 // currentPosition is managed by replay controls, not backend responses
                 totalBars = data.total_bars;
                 
-                // Process strategy results and accumulate fractals
-                if (data.strategy_results && data.strategy_results.new_fractal) {
-                    const newFractal = data.strategy_results.new_fractal;
-                    
-                    // Check if this fractal is already accumulated
-                    const exists = accumulatedFractals.some(f => 
-                        f.timestamp === newFractal.timestamp && f.fractal_type === newFractal.fractal_type
-                    );
-                    
-                    if (!exists) {
-                        accumulatedFractals.push(newFractal);
-                        console.log(`🔺 New fractal detected: ${newFractal.fractal_type} at ${newFractal.timestamp}, total: ${accumulatedFractals.length}`);
-                        
-                        // Add to chart immediately if fractals are enabled
-                        if (document.getElementById('showFractals').checked) {
-                            addNewFractalToChart(newFractal);
-                        }
-                    }
-                }
+                // Prepare debug panel updates
+                let debugUpdates = {};
                 
-                // 🚨 CRITICAL FIX: Process new swings from strategy results
-                if (data.strategy_results && data.strategy_results.new_swing) {
-                    const newSwing = data.strategy_results.new_swing;
-                    console.log(`🔥 NEW SWING DETECTED from backend:`, newSwing);
-                    
-                    // 🔧 CRUCIAL: Check if this is a new dominant swing
-                    const previousDominantSwing = accumulatedDominantSwing;
-                    const newDominantSwing = newSwing.is_dominant ? newSwing : null;
-                    
-                    // Clear ABC patterns if dominant swing has changed
-                    if (previousDominantSwing && newDominantSwing && 
-                        previousDominantSwing.start_fractal.timestamp !== newDominantSwing.start_fractal.timestamp) {
-                        console.log('🔄 DOMINANT SWING CHANGED - Clearing old ABC patterns');
-                        if (abcPatternManager) {
-                            abcPatternManager.clearABCPatterns();
-                        }
-                        accumulatedABCPatterns = []; // Clear accumulated ABC patterns
-                    }
-                    
-                    // Add the new swing to accumulated swings (replacing any existing swing)
-                    accumulatedSwings = []; // Clear existing swings for clean dominance
-                    accumulatedSwings.push(newSwing);
-                    
-                    // 🔧 RESTORED ORIGINAL LOGIC: This was actually correct!
-                    accumulatedDominantSwing = newSwing.is_dominant ? newSwing : null;
-                    
-                    console.log(`📈 Swing added: ${newSwing.direction} from ${newSwing.start_fractal.price} to ${newSwing.end_fractal.price}, dominant: ${newSwing.is_dominant}`);
-                    
-                    // Update swing display immediately if swings are enabled
-                    if (document.getElementById('showSwings').checked) {
-                        swingLineManager.loadAllSwings(accumulatedSwings);
-                        console.log(`🎯 Swing line updated on chart`);
-                    }
-                }
-                
-                // 🚨 CRITICAL FIX: Process swing recalculations (but only when actually needed)
-                if (data.strategy_results && (data.strategy_results.swing_recalculated_for_new_fractal || data.strategy_results.lookback_recalculation)) {
-                    console.log(`🔄 SWING RECALCULATION detected - reloading current strategy state`);
-                    
-                    // Only reload if we don't already have a new swing in this update
-                    if (!data.strategy_results.new_swing) {
-                        reloadCurrentSwingState();
-                    } else {
-                        console.log(`📊 New swing already processed in this update, skipping additional reload`);
-                    }
-                }
-                
-                // Process ABC patterns from strategy results
-                if (data.strategy_results && data.strategy_results.abc_patterns) {
+                // Process strategy results and batch all updates
+                if (data.strategy_results) {
                     const results = data.strategy_results;
-                    console.log('🌊 ABC Pattern check:', {
-                        'has_abc_patterns': !!(results.abc_patterns && results.abc_patterns.length > 0),
-                        'abc_patterns_count': results.abc_patterns ? results.abc_patterns.length : 0,
-                        'checkbox_checked': document.getElementById('showABC') ? document.getElementById('showABC').checked : false,
-                        'abc_patterns_data': results.abc_patterns
-                    });
                     
-                    if (results.abc_patterns && results.abc_patterns.length > 0) {
-                        accumulatedABCPatterns = results.abc_patterns;
+                    // 1. Process new fractals (batch)
+                    if (results.new_fractal && document.getElementById('showFractals').checked) {
+                        console.log(`🔺 Batching new fractal: ${results.new_fractal.fractal_type} at ${results.new_fractal.timestamp}`);
+                        chartUpdateBatcher.addFractal(results.new_fractal);
+                    }
+                    
+                    // 2. Process new swings (batch)
+                    if (results.new_swing) {
+                        console.log(`📈 Batching new swing: ${results.new_swing.direction} swing`);
                         
-                        if (document.getElementById('showABC') && document.getElementById('showABC').checked) {
-                            console.log('✅ Calling abcPatternManager.loadAllABCPatterns with', results.abc_patterns.length, 'patterns');
+                        // Handle dominant swing changes
+                        const previousDominantSwing = accumulatedDominantSwing;
+                        const newDominantSwing = results.new_swing.is_dominant ? results.new_swing : null;
+                        
+                        // Clear ABC patterns if dominant swing has changed
+                        if (previousDominantSwing && newDominantSwing && 
+                            previousDominantSwing.start_fractal.timestamp !== newDominantSwing.start_fractal.timestamp) {
+                            console.log('🔄 DOMINANT SWING CHANGED - Clearing old ABC patterns');
                             if (abcPatternManager) {
-                                abcPatternManager.loadAllABCPatterns(results.abc_patterns, accumulatedDominantSwing);
+                                abcPatternManager.clearABCPatterns();
+                            }
+                            accumulatedABCPatterns = [];
+                        }
+                        
+                        // Update accumulated state
+                        accumulatedSwings = []; // Clear for clean dominance
+                        accumulatedSwings.push(results.new_swing);
+                        accumulatedDominantSwing = results.new_swing.is_dominant ? results.new_swing : null;
+                        
+                        // Batch swing update
+                        if (document.getElementById('showSwings').checked) {
+                            chartUpdateBatcher.addSwing(results.new_swing);
+                        }
+                    }
+                    
+                    // 3. Process ABC patterns (batch)
+                    if (results.abc_patterns) {
+                        const validPatterns = [];
+                        if (Array.isArray(results.abc_patterns)) {
+                            results.abc_patterns.forEach(pattern => {
+                                if (pattern && pattern.wave_a && pattern.wave_b && pattern.wave_c) {
+                                    validPatterns.push(pattern);
+                                } else {
+                                    console.warn('Skipping invalid ABC pattern:', pattern);
+                                }
+                            });
+                        }
+                        
+                        if (validPatterns.length > 0) {
+                            accumulatedABCPatterns = validPatterns;
+                            if (document.getElementById('showABC') && document.getElementById('showABC').checked) {
+                                console.log(`🌊 Batching ${validPatterns.length} ABC patterns`);
+                                chartUpdateBatcher.addABCPatterns(validPatterns, accumulatedDominantSwing);
                             }
                         }
                     }
+                    
+                    // 4. Process Fibonacci levels (batch)
+                    if (results.fibonacci_levels && results.fibonacci_levels.length > 0 && document.getElementById('showFibonacci').checked) {
+                        console.log(`📐 Batching ${results.fibonacci_levels.length} Fibonacci levels`);
+                        accumulatedFibonacci = results.fibonacci_levels;
+                        chartUpdateBatcher.addFibonacci(results.fibonacci_levels, accumulatedDominantSwing);
+                    }
+                    
+                    // 5. Process signals (batch)
+                    if (results.new_signals && results.new_signals.length > 0 && document.getElementById('showSignals').checked) {
+                        console.log(`📊 Batching ${results.new_signals.length} signals`);
+                        chartUpdateBatcher.addSignals(results.new_signals);
+                    }
+                    
+                    // 6. Process enhanced signals (batch)
+                    if (results.enhanced_signals && Array.isArray(results.enhanced_signals) && results.enhanced_signals.length > 0 && document.getElementById('showEnhancedSignals') && document.getElementById('showEnhancedSignals').checked) {
+                        console.log(`⭐ Batching ${results.enhanced_signals.length} enhanced signals`);
+                        chartUpdateBatcher.addEnhancedSignals(results.enhanced_signals);
+                    }
+                    
+                    // 7. Prepare debug panel updates (batch)
+                    debugUpdates = {
+                        fractalCount: results.total_fractals || 0,
+                        swingCount: results.total_swings || 0,
+                        signalCount: results.total_signals || 0,
+                        enhancedSignalCount: results.total_enhanced_signals || 0,
+                        abcPatternCount: results.total_abc_patterns || 0
+                    };
+                    
+                    // Update market bias display (non-chart update)
+                    if (results.market_bias) {
+                        updateMarketBiasDisplay(results.market_bias);
+                    }
+                    
+                    // Update signal performance stats (non-chart update)
+                    if (results.signal_performance) {
+                        const stats = results.signal_performance;
+                        debugUpdates.activeSignalsCount = stats.active_signals;
+                        debugUpdates.completedSignalsCount = stats.completed_signals;
+                        debugUpdates.signalWinRate = stats.win_rate + '%';
+                        debugUpdates.avgBarsToResolution = stats.avg_bars_to_resolution;
+                    }
+                    
+                    // Handle swing recalculation events (non-chart update)
+                    if (results.lookback_recalculation || results.swing_invalidated) {
+                        const reason = results.lookback_recalculation ? 'lookback window change' : 'swing invalidation';
+                        console.log(`🔄 SWING RECALCULATION: Reloading all swings due to ${reason}`);
+                        // Schedule reload without blocking batch processing
+                        setTimeout(() => {
+                            reloadCurrentSwingState();
+                        }, 100);
+                    }
                 }
                 
-                // Update data inspector with current bar
+                // Handle swing recalculations from top level
+                if (data.strategy_results && (data.strategy_results.swing_recalculated_for_new_fractal || data.strategy_results.lookback_recalculation)) {
+                    console.log(`🔄 SWING RECALCULATION detected - will reload state after batch processing`);
+                    // Schedule reload after batch processing completes
+                    if (!data.strategy_results.new_swing) {
+                        setTimeout(() => {
+                            reloadCurrentSwingState();
+                        }, 100);
+                    }
+                }
+                
+                // Update data inspector with current bar (non-chart update)
                 if (data.current_bar) {
                     const barData = {
                         timestamp: data.timestamp,
@@ -1882,79 +2399,35 @@ async def get_research_dashboard():
                     updateDataInspector(barData, currentPosition);
                 }
                 
-                // Update strategy analysis panels
-                if (data.strategy_results) {
-                    const results = data.strategy_results;
-                    
-                    // Update debug panel
-                    document.getElementById('fractalCount').textContent = results.total_fractals || 0;
-                    document.getElementById('swingCount').textContent = results.total_swings || 0;
-                    document.getElementById('signalCount').textContent = results.total_signals || 0;
-                    document.getElementById('abcPatternCount').textContent = results.total_abc_patterns || 0;
-                    
-                    // Update market bias display
-                    if (results.market_bias) {
-                        updateMarketBiasDisplay(results.market_bias);
-                    }
-                    
-                    // Show fractal detection info at the beginning
-                    if (currentPosition < 10 && results.total_fractals === 0) {
-                        updateStatus(`Bar ${currentPosition + 1}/${totalBars} - Need at least 10 bars for first fractal detection (5 before + 5 after)`);
-                    }
-                    
-                    // Add new fractals to chart ONLY if checkbox is checked
-                    if (results.new_fractal && document.getElementById('showFractals').checked) {
-                        addNewFractalToChart(results.new_fractal);
-                    }
-                    
-                    // Note: Removed redundant loadAccumulatedStrategyElements call here to reduce API load
-                    // The main strategy calls in replay functions already handle fractal accumulation
-                    
-                    // Handle swing recalculation events - reload all swings (avoid double reload)
-                    if (results.lookback_recalculation || results.swing_invalidated) {
-                        const reason = results.lookback_recalculation ? 'lookback window change' : 'swing invalidation';
-                        console.log(`🔄 SWING RECALCULATION: Reloading all swings due to ${reason}`);
-                        setTimeout(() => {
-                            loadAllStrategyElements();
-                        }, 100);
-                    }
-
-                    // Add new swings to chart ONLY if checkbox is checked
-                    if (results.new_swing && document.getElementById('showSwings').checked) {
-                        addNewSwingToChart(results.new_swing);
-                    }
-                    
-                    // Add Fibonacci levels to chart ONLY if checkbox is checked
-                    if (results.fibonacci_levels && results.fibonacci_levels.length > 0 && document.getElementById('showFibonacci').checked) {
-                        addFibonacciLevelsToChart(results.fibonacci_levels);
-                    }
-                    
-                    // Add new signals to chart ONLY if checkbox is checked
-                    if (results.new_signals && results.new_signals.length > 0 && document.getElementById('showSignals').checked) {
-                        addNewSignalsToChart(results.new_signals);
-                    }
-                }
-                
-                // Update performance metrics
+                // Update performance metrics (non-chart update)
                 if (data.performance) {
                     updatePerformanceMetrics(data.performance);
                 }
                 
-                // Update position display
+                // Update position display (non-chart update)
                 updatePositionDisplay();
                 
-                // Update status with progress
+                // Update status with progress (non-chart update)
                 const progressPercent = data.progress || (currentPosition / totalBars * 100);
                 updateStatus(`Bar ${currentPosition + 1}/${totalBars} (${progressPercent.toFixed(1)}%) - ${data.timestamp || ''}`);
                 
-                // CRITICAL: Update all markers after processing to preserve fractals
-                updateAllMarkers();
+                // Show fractal detection info at the beginning
+                if (currentPosition < 10 && data.strategy_results && data.strategy_results.total_fractals === 0) {
+                    updateStatus(`Bar ${currentPosition + 1}/${totalBars} - Need at least 10 bars for first fractal detection (5 before + 5 after)`);
+                }
                 
-                // Additional safeguard: Ensure fractals remain visible during playback
-                if (document.getElementById('showFractals').checked) {
-                    setTimeout(() => {
-                        loadAccumulatedStrategyElements(currentPosition);
-                    }, 50);
+                // 8. Batch debug panel updates
+                if (Object.keys(debugUpdates).length > 0) {
+                    chartUpdateBatcher.updateDebugPanel(debugUpdates);
+                }
+                
+                // 🎯 CRITICAL: ALL chart updates are now batched and will be processed in a single operation
+                // This eliminates the 10+ simultaneous chart updates that were causing flashing
+                console.log('✅ BATCHED UPDATE: All updates queued, will process in single batch');
+                
+                // Ensure batcher processes if any updates were queued
+                if (window.chartUpdateBatcher) {
+                    window.chartUpdateBatcher.flushBatch();
                 }
             }
             
@@ -2122,6 +2595,11 @@ async def get_research_dashboard():
                 abcPatternManager = new ABCPatternManager(candlestickSeries);
                 lookbackManager = new LookbackIndicatorManager();
                 supplyDemandManager = new SupplyDemandZoneManager(candlestickSeries);
+                
+                // ✅ Initialize chart update batcher to eliminate flashing
+                chartUpdateBatcher = new ChartUpdateBatcher();
+                window.chartUpdateBatcher = chartUpdateBatcher; // Make globally accessible
+                console.log('✅ Chart update batcher initialized');
                 
                 // Initialize professional tools system
                 selectTool('cursor');
@@ -2311,60 +2789,37 @@ async def get_research_dashboard():
                     }
                 }
 
-                // Update markers with position filtering
+                // ✅ RESTORED: Direct marker updates for continuous visibility
                 updateAllMarkers();
             }
             
-            // Add fractals to chart
+            // ✅ RESTORED - Direct fractal loading for continuous visibility
             function addFractalsToChart(fractals) {
-                if (!candlestickSeries) return;
+                if (!fractals || !fractalManager) return;
                 
-                // Clear existing fractal markers from allMarkers
-                allMarkers = allMarkers.filter(m => !m.shape || (m.shape !== 'arrowDown' && m.shape !== 'arrowUp'));
+                console.log(`🔺 DIRECT: Loading ${fractals.length} fractals to chart`);
                 
-                const fractalMarkers = fractals.map(fractal => ({
-                    time: Math.floor(new Date(fractal.timestamp).getTime() / 1000),
-                    position: fractal.type === 'high' ? 'aboveBar' : 'belowBar',
-                    color: fractal.type === 'high' ? '#ff6b6b' : '#4ecdc4',
-                    shape: fractal.type === 'high' ? 'arrowDown' : 'arrowUp',
-                    text: '', // No text for clean display
-                    size: 1
-                }));
-                
-                // Add new fractal markers to allMarkers
-                allMarkers.push(...fractalMarkers);
-                
-                // Sort markers by time to ensure proper display
-                allMarkers.sort((a, b) => a.time - b.time);
-                
-                // Debug logging
-                console.log('Initial fractals loaded:', {
-                    count: fractals.length,
-                    timestamps: fractals.slice(0, 5).map(f => ({
-                        original: f.timestamp,
-                        unix: Math.floor(new Date(f.timestamp).getTime() / 1000)
-                    })),
-                    totalMarkers: allMarkers.length,
-                    markerRange: allMarkers.length > 0 ? {
-                        first: new Date(allMarkers[0].time * 1000).toISOString(),
-                        last: new Date(allMarkers[allMarkers.length - 1].time * 1000).toISOString()
-                    } : null
+                // Add each fractal to the manager for immediate display
+                fractals.forEach(fractal => {
+                    const fractalData = {
+                        timestamp: fractal.timestamp,
+                        fractal_type: fractal.type || fractal.fractal_type, // Handle both formats
+                        bar_index: fractal.bar_index
+                    };
+                    
+                    // Add to accumulated array and display immediately
+                    const exists = accumulatedFractals.some(f => 
+                        f.timestamp === fractalData.timestamp && f.fractal_type === fractalData.fractal_type
+                    );
+                    
+                    if (!exists) {
+                        accumulatedFractals.push(fractalData);
+                        window.accumulatedFractals.push(fractalData); // Sync with global reference
+                    }
                 });
                 
-                candlestickSeries.setMarkers(allMarkers);
-                
-                // Debug: Check marker positions after setting
-                setTimeout(() => {
-                    console.log('Verifying fractal positions after 100ms:', {
-                        totalMarkers: allMarkers.length,
-                        sampleMarkers: allMarkers.slice(0, 5).map(m => ({
-                            time: m.time,
-                            date: new Date(m.time * 1000).toISOString(),
-                            position: m.position,
-                            shape: m.shape
-                        }))
-                    });
-                }, 100);
+                // Update fractal manager with all accumulated fractals
+                fractalManager.loadAllFractals(accumulatedFractals);
             }
             
             // Add swings to chart
@@ -2394,29 +2849,14 @@ async def get_research_dashboard():
                 console.log(`📊 Loaded ${swings.length} swing lines from database`);
             }
             
-            // Add signals to chart
+            // ✅ SIGNALS: Delegate to batching system (prevents flashing)
             function addSignalsToChart(signals) {
-                if (!candlestickSeries) return;
+                if (!signals || !window.chartUpdateBatcher) return;
                 
-                // Clear existing signal markers (size 2) from allMarkers
-                allMarkers = allMarkers.filter(m => m.size !== 2);
+                console.log(`📊 SIGNALS: Delegating ${signals.length} signals to ChartUpdateBatcher`);
                 
-                const signalMarkers = signals.map(signal => ({
-                    time: Math.floor(new Date(signal.timestamp).getTime() / 1000),
-                    position: signal.direction === 'buy' ? 'belowBar' : 'aboveBar',
-                    color: signal.direction === 'buy' ? '#26a69a' : '#ef5350',
-                    shape: signal.direction === 'buy' ? 'arrowUp' : 'arrowDown',
-                    text: '', // No text for clean display
-                    size: 2
-                }));
-                
-                // Add new signal markers to allMarkers
-                allMarkers.push(...signalMarkers);
-                
-                // Sort markers by time to ensure proper display
-                allMarkers.sort((a, b) => a.time - b.time);
-                
-                candlestickSeries.setMarkers(allMarkers);
+                // Use batching for signals to prevent flashing
+                window.chartUpdateBatcher.addSignals(signals);
             }
             
             // Dynamic chart update functions for real-time strategy visualization
@@ -2564,182 +3004,414 @@ async def get_research_dashboard():
                 }
             }
             
-            // ✅ SUPPLY & DEMAND ZONE MANAGER
+            // ✅ SUPPLY & DEMAND RECTANGLE DRAWING PLUGIN
+            // Custom rectangle renderer for professional S&D zones
+
+            // ✅ PROFESSIONAL SUPPLY & DEMAND ZONE MANAGER WITH PRICE LINES
+            // Uses TradingView's native price line system for reliable zone display
+
+            // ✅ ENHANCED SUPPLY & DEMAND ZONE MANAGER WITH RECTANGLE PLUGIN
             class SupplyDemandZoneManager {
                 constructor(candlestickSeries) {
-                    this.candlestickSeries = candlestickSeries;
-                    this.zoneRectangles = [];
-                    this.addedZones = new Set();
-                    this.zonesVisible = true;
-                    
-                    // Zone styling based on type and strength
-                    this.zoneStyles = {
-                        supply: {
-                            borderColor: '#ff4757',
-                            fillColor: 'rgba(255, 71, 87, 0.15)',
-                            borderWidth: 2
-                        },
-                        demand: {
-                            borderColor: '#2ed573',
-                            fillColor: 'rgba(46, 213, 115, 0.15)',
-                            borderWidth: 2
-                        },
-                        continuation: {
-                            borderColor: '#ffa502',
-                            fillColor: 'rgba(255, 165, 2, 0.15)',
-                            borderWidth: 2
+                    try {
+                        
+                        this.candlestickSeries = candlestickSeries;
+                        this.chart = chart; // Use global chart variable
+                        
+                        // Verify chart is available
+                        if (!this.chart) {
+                            throw new Error('Chart not available for SupplyDemandZoneManager');
                         }
-                    };
-                    
-                    console.log('📦 SupplyDemandZoneManager initialized');
+                        
+                        this.zoneLineSeries = new Map(); // Store zone line series
+                        this.addedZones = new Set();
+                        this.zonesVisible = true;
+                        this.currentBarIndex = 0; // Track current position for dynamic zones
+                        this.allZones = []; // Store all zones for dynamic display
+                        this.currentlyVisibleZones = new Set(); // Track which zones are currently visible
+
+                        // Zone styling based on type (MT4 style colors)
+                        this.zoneStyles = {
+                            supply: {
+                                topColor: '#ff4757',
+                                bottomColor: '#ff6b7a',
+                                lineWidth: 2
+                            },
+                            demand: {
+                                topColor: '#2ed573',
+                                bottomColor: '#48e68a',
+                                lineWidth: 2
+                            },
+                            continuation: {
+                                topColor: '#ffa502',
+                                bottomColor: '#ffc107',
+                                lineWidth: 2
+                            }
+                        };
+
+                        // Manager initialized successfully
+                    } catch (error) {
+                        console.error('❌ Error initializing SupplyDemandZoneManager:', error);
+                        throw error;
+                    }
                 }
                 
-                // Add individual zone rectangle to chart
-                addZone(zone) {
+                // Add individual zone using time-bounded line series (MT4 style)
+                addZone(zone, currentBarIndex = null) {
                     try {
                         const zoneId = this.getZoneId(zone);
-                        
+
                         // Check if zone already added
                         if (this.addedZones.has(zoneId)) {
                             return;
                         }
-                        
-                        // Get zone style based on type
+
+                        // Get zone styling
                         const style = this.zoneStyles[zone.zone_type] || this.zoneStyles.supply;
                         
-                        // Adjust opacity based on zone strength
-                        const strength = zone.strength_score || 0.5;
-                        const alpha = 0.1 + (strength * 0.2); // 0.1 to 0.3 alpha based on strength
-                        const fillColor = style.fillColor.replace('0.15', alpha.toFixed(2));
-                        
-                        // Create zone using enhanced price lines with zone styling
-                        const topLine = this.candlestickSeries.createPriceLine({
-                            price: zone.top_price,
-                            color: style.borderColor,
-                            lineWidth: 2,
-                            lineStyle: 0,
-                            axisLabelVisible: false,
-                            title: `${zone.zone_type.toUpperCase()} Top`
+                        // Parse zone start time
+                        const zoneStartTime = this.parseTime(zone.left_time);
+                        if (!zoneStartTime) {
+                            console.warn('Invalid zone start time:', zone.left_time);
+                            return;
+                        }
+
+                        // Calculate zone end time (2-3 bars into future from current position)
+                        const barsExtension = 3; // Extend 3 bars into future
+                        const barDurationSeconds = 60; // 1 minute for M1 timeframe
+                        const currentTime = currentBarIndex ? this.getCurrentBarTime(currentBarIndex) : zoneStartTime;
+                        const zoneEndTime = currentTime + (barsExtension * barDurationSeconds);
+
+                        // Create top line series
+                        const topLineSeries = this.chart.addLineSeries({
+                            color: style.topColor,
+                            lineWidth: style.lineWidth,
+                            lineStyle: 0, // Solid line
+                            crosshairMarkerVisible: false,
+                            lastValueVisible: false,
+                            priceLineVisible: false
                         });
-                        
-                        const bottomLine = this.candlestickSeries.createPriceLine({
-                            price: zone.bottom_price,
-                            color: style.borderColor,
-                            lineWidth: 2,
-                            lineStyle: 0,
-                            axisLabelVisible: false,
-                            title: `${zone.zone_type.toUpperCase()} Bottom`
+
+                        // Create bottom line series  
+                        const bottomLineSeries = this.chart.addLineSeries({
+                            color: style.bottomColor,
+                            lineWidth: style.lineWidth,
+                            lineStyle: 1, // Dashed line
+                            crosshairMarkerVisible: false,
+                            lastValueVisible: false,
+                            priceLineVisible: false
                         });
+
+                        // Set line data (horizontal lines from start to end time)
+                        const topLineData = [
+                            { time: zoneStartTime, value: zone.top_price },
+                            { time: zoneEndTime, value: zone.top_price }
+                        ];
                         
-                        // Add zone label at midpoint
-                        const zoneMidPrice = (zone.top_price + zone.bottom_price) / 2;
-                        const zoneLabel = this.candlestickSeries.createPriceLine({
-                            price: zoneMidPrice,
-                            color: 'transparent',
-                            lineWidth: 0,
-                            axisLabelVisible: true,
-                            title: `${zone.zone_type.toUpperCase()} Zone (${zone.strength_score || 'N/A'})`
-                        });
-                        
-                        // Store zone references (lines only - simple and effective)
-                        this.zoneRectangles.push({
+                        const bottomLineData = [
+                            { time: zoneStartTime, value: zone.bottom_price },
+                            { time: zoneEndTime, value: zone.bottom_price }
+                        ];
+
+                        topLineSeries.setData(topLineData);
+                        bottomLineSeries.setData(bottomLineData);
+
+                        // Store zone line series
+                        this.zoneLineSeries.set(zoneId, {
                             zone: zone,
-                            topLine: topLine,
-                            bottomLine: bottomLine,
-                            zoneLabel: zoneLabel,
+                            topSeries: topLineSeries,
+                            bottomSeries: bottomLineSeries,
                             id: zoneId,
-                            visible: this.zonesVisible
+                            visible: this.zonesVisible,
+                            startTime: zoneStartTime,
+                            endTime: zoneEndTime
                         });
-                        
+
                         this.addedZones.add(zoneId);
-                        
-                        console.log(`📦 Added ${zone.zone_type} zone: ${zone.top_price}-${zone.bottom_price}`);
-                        
+
+                        // Zone added successfully - debug via UI panel
+
                     } catch (error) {
                         console.error('❌ Error adding S&D zone:', error);
                     }
                 }
-                
-                // Load multiple zones at once
-                loadAllZones(zones) {
-                    console.log(`📦 Loading ${zones.length} S&D zones...`);
-                    
-                    // Clear existing zones first
-                    this.clearZones();
-                    
-                    // Add each zone
-                    zones.forEach(zone => {
-                        this.addZone(zone);
-                    });
-                    
-                    console.log(`✅ Loaded ${this.zoneRectangles.length} S&D zones`);
+
+                // Parse time string to TradingView time format
+                parseTime(timeStr) {
+                    try {
+                        if (!timeStr) return null;
+
+                        // Handle ISO string format
+                        if (typeof timeStr === 'string') {
+                            const date = new Date(timeStr);
+                            if (isNaN(date.getTime())) return null;
+                            return Math.floor(date.getTime() / 1000); // Convert to Unix timestamp
+                        }
+
+                        // Handle Unix timestamp
+                        if (typeof timeStr === 'number') {
+                            return timeStr > 1000000000000 ? Math.floor(timeStr / 1000) : timeStr;
+                        }
+
+                        return null;
+                    } catch (error) {
+                        console.error('Error parsing time:', timeStr, error);
+                        return null;
+                    }
                 }
                 
+                // Load multiple zones at once (MT4 style)
+                loadAllZones(zones, currentBarIndex = null) {
+                    console.log(`📦 Loading ${zones.length} S&D zones (MT4 style)...`);
+
+                    // Clear existing zones first
+                    this.clearZones();
+
+                    // Add each zone with current bar context
+                    zones.forEach(zone => {
+                        this.addZone(zone, currentBarIndex);
+                    });
+
+                    console.log(`✅ Loaded ${this.zoneLineSeries.size} S&D line series zones`);
+                }
+
                 // Toggle zone visibility
                 toggleZoneVisibility() {
                     this.zonesVisible = !this.zonesVisible;
                     
-                    this.zoneRectangles.forEach(rect => {
-                        // For price lines, we need to remove/add them to hide/show
-                        rect.visible = this.zonesVisible;
-                        if (!this.zonesVisible) {
-                            // Hide by changing color to transparent
-                            // (Note: TradingView price lines don't have a visible property)
-                            // We'll handle this in the filter functions
+                    // Toggle visibility of all line series
+                    this.zoneLineSeries.forEach(zoneData => {
+                        try {
+                            if (this.zonesVisible) {
+                                // Show the series
+                                zoneData.topSeries.applyOptions({ visible: true });
+                                zoneData.bottomSeries.applyOptions({ visible: true });
+                            } else {
+                                // Hide the series
+                                zoneData.topSeries.applyOptions({ visible: false });
+                                zoneData.bottomSeries.applyOptions({ visible: false });
+                            }
+                            zoneData.visible = this.zonesVisible;
+                        } catch (error) {
+                            console.warn('Error toggling zone visibility:', error);
                         }
                     });
-                    
+
                     console.log(`📦 S&D zones ${this.zonesVisible ? 'shown' : 'hidden'}`);
                 }
-                
+
                 // Filter zones by type
                 filterZonesByType(zoneTypes) {
                     console.log(`📦 Filtering zones by type: ${zoneTypes.join(', ')}`);
-                    // Note: TradingView price lines don't have visible property
-                    // We'll implement this by removing/adding lines as needed
+
+                    // Toggle visibility instead of removing/re-adding
+                    this.zoneLineSeries.forEach(zoneData => {
+                        const shouldShow = zoneTypes.includes(zoneData.zone.zone_type) && this.zonesVisible;
+                        try {
+                            zoneData.topSeries.applyOptions({ visible: shouldShow });
+                            zoneData.bottomSeries.applyOptions({ visible: shouldShow });
+                            zoneData.visible = shouldShow;
+                        } catch (error) {
+                            console.warn('Error filtering zone visibility:', error);
+                        }
+                    });
                 }
-                
-                // Filter zones by minimum strength  
+
+                // Filter zones by minimum strength
                 filterZonesByStrength(minStrength) {
                     console.log(`📦 Filtering zones by minimum strength: ${minStrength}`);
-                    // Note: TradingView price lines don't have visible property
-                    // We'll implement this by removing/adding lines as needed
+
+                    // Toggle visibility based on strength
+                    this.zoneLineSeries.forEach(zoneData => {
+                        const strength = zoneData.zone.strength_score || 0;
+                        const shouldShow = strength >= minStrength && this.zonesVisible;
+                        try {
+                            zoneData.topSeries.applyOptions({ visible: shouldShow });
+                            zoneData.bottomSeries.applyOptions({ visible: shouldShow });
+                            zoneData.visible = shouldShow;
+                        } catch (error) {
+                            console.warn('Error filtering zone by strength:', error);
+                        }
+                    });
                 }
-                
+
                 // Clear all zones
                 clearZones() {
-                    this.zoneRectangles.forEach(rect => {
-                        // Remove price lines only (simple approach)
-                        this.candlestickSeries.removePriceLine(rect.topLine);
-                        this.candlestickSeries.removePriceLine(rect.bottomLine);
-                        this.candlestickSeries.removePriceLine(rect.zoneLabel);
+                    // Remove all line series
+                    this.zoneLineSeries.forEach(zoneData => {
+                        try {
+                            this.chart.removeSeries(zoneData.topSeries);
+                            this.chart.removeSeries(zoneData.bottomSeries);
+                        } catch (error) {
+                            console.warn('Warning removing line series:', error);
+                        }
                     });
-                    this.zoneRectangles = [];
+
+                    this.zoneLineSeries.clear();
                     this.addedZones.clear();
-                    
-                    console.log('🧹 Cleared all S&D zones');
+
+                    // Zones cleared
                 }
                 
                 // Generate unique zone ID
                 getZoneId(zone) {
                     return zone.id || `${zone.symbol}_${zone.timeframe}_${zone.zone_type}_${zone.left_time}_${zone.top_price}_${zone.bottom_price}`;
                 }
-                
+
                 // Get zone statistics
                 getZoneStats() {
                     const stats = {
-                        total: this.zoneRectangles.length,
+                        total: this.zoneLineSeries.size,
                         supply: 0,
                         demand: 0,
                         continuation: 0,
-                        visible: this.zoneRectangles.filter(rect => rect.visible !== false).length
+                        visible: Array.from(this.zoneLineSeries.values()).filter(zoneData => zoneData.visible !== false).length
                     };
-                    
-                    this.zoneRectangles.forEach(rect => {
-                        stats[rect.zone.zone_type]++;
+
+                    this.zoneLineSeries.forEach(zoneData => {
+                        if (zoneData.zone && zoneData.zone.zone_type) {
+                            stats[zoneData.zone.zone_type] = (stats[zoneData.zone.zone_type] || 0) + 1;
+                        }
                     });
-                    
+
                     return stats;
+                }
+
+                // Update all zone line series (useful for chart updates)
+                updateAllZones(currentBarIndex = null) {
+                    if (currentBarIndex !== null) {
+                        this.updateZoneExtensions(currentBarIndex);
+                    }
+                    console.log(`📦 Updated ${this.zoneLineSeries.size} S&D zones`);
+                }
+
+                // Get zones by type
+                getZonesByType(zoneType) {
+                    return Array.from(this.zoneLineSeries.values()).filter(zoneData => zoneData.zone.zone_type === zoneType);
+                }
+
+                // Remove specific zone
+                removeZone(zoneId) {
+                    const zoneData = this.zoneLineSeries.get(zoneId);
+                    if (zoneData) {
+                        // Remove line series
+                        try {
+                            this.chart.removeSeries(zoneData.topSeries);
+                            this.chart.removeSeries(zoneData.bottomSeries);
+                        } catch (error) {
+                            console.warn('Warning removing specific line series:', error);
+                        }
+                        
+                        // Remove from collections
+                        this.zoneLineSeries.delete(zoneId);
+                        this.addedZones.delete(zoneId);
+                        
+                        console.log(`🗑️ Removed zone: ${zoneId}`);
+                    }
+                }
+                
+                // Get current bar time for dynamic zone extension
+                getCurrentBarTime(barIndex) {
+                    if (window.fullChartData && barIndex < window.fullChartData.length) {
+                        return window.fullChartData[barIndex].time;
+                    }
+                    return Math.floor(Date.now() / 1000); // Fallback to current time
+                }
+                
+                // Update zone extensions based on current bar position
+                updateZoneExtensions(currentBarIndex) {
+                    this.currentBarIndex = currentBarIndex;
+                    
+                    // Update each zone's end time to extend from current position
+                    this.zoneLineSeries.forEach(zoneData => {
+                        try {
+                            const barsExtension = 3;
+                            const barDurationSeconds = 60; // 1 minute for M1
+                            const currentTime = this.getCurrentBarTime(currentBarIndex);
+                            const newEndTime = currentTime + (barsExtension * barDurationSeconds);
+                            
+                            // Update line data with new end time
+                            const topLineData = [
+                                { time: zoneData.startTime, value: zoneData.zone.top_price },
+                                { time: newEndTime, value: zoneData.zone.top_price }
+                            ];
+                            
+                            const bottomLineData = [
+                                { time: zoneData.startTime, value: zoneData.zone.bottom_price },
+                                { time: newEndTime, value: zoneData.zone.bottom_price }
+                            ];
+                            
+                            zoneData.topSeries.setData(topLineData);
+                            zoneData.bottomSeries.setData(bottomLineData);
+                            zoneData.endTime = newEndTime;
+                            
+                        } catch (error) {
+                            console.warn('Error updating zone extension:', error);
+                        }
+                    });
+                }
+                
+                // Store zones for dynamic display (MT4 style - zones appear when replay reaches them)
+                storeZonesForDynamicDisplay(zones) {
+                    this.allZones = zones;
+                    
+                    // Clear any existing zones
+                    this.clearZones();
+                    this.currentlyVisibleZones.clear();
+                    
+                    // Debug event
+                    if (typeof addZoneDebugEvent === 'function') {
+                        addZoneDebugEvent(`Loaded ${zones.length} zones for dynamic display`);
+                    }
+                }
+                
+                // Update dynamic zone display based on current bar position
+                updateDynamicZoneDisplay(currentBarIndex) {
+                    if (!this.allZones || this.allZones.length === 0) return;
+                    
+                    this.currentBarIndex = currentBarIndex;
+                    const currentTime = this.getCurrentBarTime(currentBarIndex);
+                    
+                    this.allZones.forEach(zone => {
+                        const zoneId = this.getZoneId(zone);
+                        const zoneStartTime = this.parseTime(zone.left_time);
+                        
+                        // Check if zone should be visible (replay has reached the zone detection point)
+                        if (zoneStartTime && currentTime >= zoneStartTime) {
+                            // Zone should be visible
+                            if (!this.currentlyVisibleZones.has(zoneId)) {
+                                // Add the zone
+                                this.addZone(zone, currentBarIndex);
+                                this.currentlyVisibleZones.add(zoneId);
+                                
+                                // Debug event
+                                if (typeof addZoneDebugEvent === 'function') {
+                                    const timeStr = new Date(zoneStartTime * 1000).toISOString().substring(11, 19);
+                                    addZoneDebugEvent(`${zone.zone_type.toUpperCase()} zone appeared at ${timeStr} (${zone.top_price.toFixed(2)}-${zone.bottom_price.toFixed(2)})`);
+                                }
+                                
+                                // Update debug info
+                                if (typeof updateZoneDebugInfo === 'function') {
+                                    updateZoneDebugInfo();
+                                }
+                            } else {
+                                // Zone already visible, just update its extension
+                                this.updateZoneExtensions(currentBarIndex);
+                            }
+                        } else {
+                            // Zone should not be visible yet
+                            if (this.currentlyVisibleZones.has(zoneId)) {
+                                // Remove the zone (shouldn't happen in forward replay, but useful for backward nav)
+                                this.removeZone(zoneId);
+                                this.currentlyVisibleZones.delete(zoneId);
+                                
+                                // Debug event
+                                if (typeof addZoneDebugEvent === 'function') {
+                                    addZoneDebugEvent(`${zone.zone_type.toUpperCase()} zone hidden (before detection)`);
+                                }
+                            }
+                        }
+                    });
                 }
             }
             
@@ -2840,7 +3512,7 @@ async def get_research_dashboard():
                 console.log(`Loaded ${fractals.length} accumulated fractals to chart`);
             }
 
-            // ✅ SIMPLIFIED - Use proper marker manager
+            // ✅ RESTORED - Direct fractal processing for continuous visibility
             function addNewFractalToChart(fractal) {
                 if (!fractal || !fractalManager) return;
                 
@@ -2851,8 +3523,9 @@ async def get_research_dashboard():
                 
                 if (!exists) {
                     accumulatedFractals.push(fractal);
-                    fractalManager.addFractal(fractal);
-                    console.log(`🔺 DISPLAY: New ${fractal.fractal_type} fractal added to chart at ${fractal.timestamp} (bar ${fractal.bar_index})`);
+                    window.accumulatedFractals.push(fractal); // Sync with global reference
+                    fractalManager.addFractal(fractal); // This calls updateChart() immediately
+                    console.log(`🔺 DIRECT: New ${fractal.fractal_type} fractal added to chart at ${fractal.timestamp} (bar ${fractal.bar_index})`);
                     console.log(`🔺 ACCUMULATED: Total fractals now: ${accumulatedFractals.length}`);
                 } else {
                     console.log(`⚠️ DUPLICATE: Fractal at ${fractal.timestamp} already exists, skipping`);
@@ -3027,6 +3700,483 @@ async def get_research_dashboard():
                 candlestickSeries.setMarkers(allMarkers);
                 
                 console.log(`Added ${signals.length} trading signals`);
+            }
+            
+            // Enhanced signals visualization with pattern confirmation details
+            function addEnhancedSignalsToChart(enhancedSignals) {
+                if (!enhancedSignals || !Array.isArray(enhancedSignals) || !candlestickSeries) {
+                    console.warn('Invalid enhanced signals data or chart not ready:', {
+                        hasSignals: !!enhancedSignals,
+                        isArray: Array.isArray(enhancedSignals),
+                        hasChart: !!candlestickSeries
+                    });
+                    return;
+                }
+                
+                // 🚨 ANTI-FLASHING: Only process truly new signals
+                const newSignals = [];
+                enhancedSignals.forEach(signal => {
+                    try {
+                        if (!signal || !signal.timestamp || !signal.price) {
+                            console.warn('Invalid signal object:', signal);
+                            return;
+                        }
+                        
+                        // Create unique identifier for signal
+                        const signalId = `${signal.timestamp}_${signal.price}_${signal.signal_type}`;
+                        
+                        // Check if this exact signal already exists
+                        const existingSignal = enhancedSignalsData.find(existing => 
+                            existing.timestamp === signal.timestamp && 
+                            existing.price === signal.price &&
+                            existing.signal_type === signal.signal_type
+                        );
+                        
+                        if (!existingSignal) {
+                            newSignals.push(signal);
+                        }
+                    } catch (error) {
+                        console.error('Error checking signal:', error, signal);
+                    }
+                });
+                
+                // Only process if we have genuinely new signals
+                if (newSignals.length === 0) {
+                    console.log('No new enhanced signals - keeping existing display');
+                    return;
+                }
+                
+                console.log(`Processing ${newSignals.length} NEW enhanced signals`);
+                
+                // 🚨 ANTI-FLASHING: Process only new signals
+                let shouldUpdateMarkers = false;
+                
+                newSignals.forEach(signal => {
+                    try {
+                        if (!signal || !signal.timestamp || !signal.price) {
+                            console.warn('Skipping invalid signal:', signal);
+                            return;
+                        }
+                        
+                        const signalTime = Math.floor(new Date(signal.timestamp).getTime() / 1000);
+                    
+                        // Create enhanced signal marker with distinctive styling
+                        const marker = {
+                            time: signalTime,
+                            position: signal.signal_type === 'buy' ? 'belowBar' : 'aboveBar',
+                            color: signal.signal_type === 'buy' ? '#00ff88' : '#ff4444', // Distinctive bright colors
+                            shape: signal.signal_type === 'buy' ? 'arrowUp' : 'arrowDown',
+                            text: `${signal.quality || 'N/A'}\\n${signal.pattern_type || 'N/A'}\\n${signal.confluence_score ? signal.confluence_score.toFixed(0) : '0'}%`, // Show quality and pattern
+                            size: 4 // Larger size to distinguish from regular signals
+                        };
+                        
+                        // Check if marker already exists at this exact timestamp and type
+                        const existingIndex = allMarkers.findIndex(m => 
+                            m.time === marker.time && 
+                            m.position === marker.position && 
+                            m.shape === marker.shape
+                        );
+                        
+                        if (existingIndex === -1) {
+                            allMarkers.push(marker);
+                            shouldUpdateMarkers = true;
+                            console.log(`Added new enhanced signal marker at ${signal.timestamp}`);
+                        }
+                        
+                        // Add horizontal lines for entry, stop loss, and take profit (but prevent duplicates)
+                        addSignalLevelsToChart(signal, signalTime);
+                        
+                        // Add to panel for new signals only
+                        addSignalToPanel(signal);
+                        
+                    } catch (error) {
+                        console.error('Error processing individual signal:', error, signal);
+                    }
+                });
+                
+                // 🚨 ANTI-FLASHING: Only update markers if we actually added new ones
+                if (shouldUpdateMarkers) {
+                    // Sort markers by time to ensure proper display
+                    allMarkers.sort((a, b) => a.time - b.time);
+                    candlestickSeries.setMarkers(allMarkers);
+                    console.log(`Updated chart with ${allMarkers.length} total markers`);
+                } else {
+                    console.log('No marker updates needed - preventing chart redraw');
+                }
+                
+                console.log(`Added ${enhancedSignals.length} enhanced trading signals with pattern confirmation`);
+            }
+            
+            // Add horizontal lines for signal levels (entry, stop, take profit)
+            function addSignalLevelsToChart(signal, signalTime) {
+                if (!chart) return;
+                
+                try {
+                    // 🚨 ANTI-FLASHING: Check if lines already exist for this signal
+                    const existingLines = enhancedSignalLines.find(line => 
+                        line.timestamp === signal.timestamp && 
+                        Math.abs(line.entryPrice - signal.price) < 0.0001
+                    );
+                    
+                    if (existingLines) {
+                        console.log(`Price lines already exist for signal at ${signal.timestamp} - skipping`);
+                        return;
+                    }
+                    
+                    // Entry level (signal price) - white line
+                    const entryLine = chart.addPriceLine({
+                        price: signal.price,
+                        color: '#ffffff',
+                        lineWidth: 2,
+                        lineStyle: LightweightCharts.LineStyle.Solid,
+                        axisLabelVisible: true,
+                        title: `Entry: ${signal.price.toFixed(2)}`
+                    });
+                    
+                    // Stop Loss level - red line
+                    const stopLine = chart.addPriceLine({
+                        price: signal.stop_loss,
+                        color: '#ff4444',
+                        lineWidth: 2,
+                        lineStyle: LightweightCharts.LineStyle.Dashed,
+                        axisLabelVisible: true,
+                        title: `SL: ${signal.stop_loss.toFixed(2)}`
+                    });
+                    
+                    // Take Profit level - green line
+                    const takeProfitLine = chart.addPriceLine({
+                        price: signal.take_profit,
+                        color: '#44ff44',
+                        lineWidth: 2,
+                        lineStyle: LightweightCharts.LineStyle.Dashed,
+                        axisLabelVisible: true,
+                        title: `TP: ${signal.take_profit.toFixed(2)} (R:R ${signal.risk_reward_ratio ? signal.risk_reward_ratio.toFixed(1) : '2.0'}:1)`
+                    });
+                    
+                    // Store references for cleanup with entry price for duplicate checking
+                    enhancedSignalLines.push({
+                        timestamp: signal.timestamp,
+                        entryPrice: signal.price,
+                        entryLine: entryLine,
+                        stopLine: stopLine,
+                        takeProfitLine: takeProfitLine
+                    });
+                    
+                    console.log(`Added signal levels for ${signal.signal_type} at ${signal.price}`);
+                } catch (error) {
+                    console.error('Error adding signal levels:', error);
+                }
+            }
+            
+            // Clear enhanced signal lines
+            function clearEnhancedSignalLines() {
+                enhancedSignalLines.forEach(signalLevel => {
+                    try {
+                        if (signalLevel.entryLine) chart.removePriceLine(signalLevel.entryLine);
+                        if (signalLevel.stopLine) chart.removePriceLine(signalLevel.stopLine);
+                        if (signalLevel.takeProfitLine) chart.removePriceLine(signalLevel.takeProfitLine);
+                    } catch (error) {
+                        console.warn('Error removing signal line:', error);
+                    }
+                });
+                enhancedSignalLines = [];
+            }
+            
+            // Add signal to enhanced signals panel
+            function addSignalToPanel(signal) {
+                // Add to global data array
+                enhancedSignalsData.push(signal);
+                
+                // Update the panel display
+                updateEnhancedSignalsPanel();
+            }
+            
+            // Update enhanced signals panel display
+            function updateEnhancedSignalsPanel() {
+                const signalsList = document.getElementById('enhancedSignalsList');
+                const liveCount = document.getElementById('liveEnhancedSignalCount');
+                
+                if (!signalsList || !liveCount) return;
+                
+                // Update live count
+                liveCount.textContent = enhancedSignalsData.length;
+                
+                if (enhancedSignalsData.length === 0) {
+                    signalsList.innerHTML = `
+                        <div style="color: #888; font-size: 0.9em; text-align: center; padding: 20px;">
+                            No enhanced signals detected yet.<br>
+                            Load data and navigate to see signals with pattern confirmation.
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Build signals list HTML
+                let signalsHTML = '';
+                enhancedSignalsData.slice(-10).reverse().forEach((signal, index) => { // Show last 10 signals, newest first
+                    const timestamp = new Date(signal.timestamp).toLocaleString();
+                    const qualityColor = signal.quality === 'strong' ? '#44ff44' : 
+                                       signal.quality === 'moderate' ? '#ffaa44' : '#ff6666';
+                    
+                    signalsHTML += `
+                        <div style="padding: 8px; margin: 4px 0; border: 1px solid #444; border-radius: 4px; background: rgba(0,0,0,0.5);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <span style="color: ${signal.signal_type === 'buy' ? '#44ff44' : '#ff4444'}; font-weight: bold;">
+                                    ${signal.signal_type.toUpperCase()}
+                                </span>
+                                <span style="color: ${qualityColor}; font-size: 0.8em; font-weight: bold;">
+                                    ${signal.quality.toUpperCase()}
+                                </span>
+                            </div>
+                            <div style="font-size: 0.75em; color: #ccc; margin-bottom: 4px;">
+                                ${timestamp}
+                            </div>
+                            <div style="font-size: 0.8em; color: #ddd;">
+                                <div>📍 Entry: ${signal.price.toFixed(2)}</div>
+                                <div>🛑 Stop: ${signal.stop_loss.toFixed(2)}</div>
+                                <div>🎯 Target: ${signal.take_profit.toFixed(2)}</div>
+                                <div>📊 Fib: ${(signal.fibonacci_level * 100).toFixed(1)}%</div>
+                                <div>🔀 Pattern: ${signal.pattern_type}</div>
+                                <div>⚡ Score: ${signal.confluence_score.toFixed(0)}% (${signal.factors.join(', ')})</div>
+                                <div>💰 R:R: ${signal.risk_reward_ratio.toFixed(1)}:1</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                signalsList.innerHTML = signalsHTML;
+            }
+            
+            // Clear all enhanced signals
+            function clearAllEnhancedSignals() {
+                enhancedSignalsData = [];
+                clearEnhancedSignalLines();
+                updateEnhancedSignalsPanel();
+                
+                // Remove enhanced signal markers from chart
+                allMarkers = allMarkers.filter(marker => 
+                    !(marker.color === '#00ff88' || marker.color === '#ff4444')
+                );
+                if (candlestickSeries) {
+                    candlestickSeries.setMarkers(allMarkers);
+                }
+                
+                console.log('Cleared all enhanced signals');
+            }
+            
+            // Export enhanced signals to CSV
+            function exportEnhancedSignals() {
+                if (enhancedSignalsData.length === 0) {
+                    alert('No enhanced signals to export');
+                    return;
+                }
+                
+                // Create CSV content
+                const headers = [
+                    'Timestamp', 'Signal Type', 'Entry Price', 'Stop Loss', 'Take Profit', 
+                    'Fibonacci Level', 'Pattern Type', 'Pattern Strength', 'Quality', 
+                    'Confluence Score', 'Risk Reward Ratio', 'Factors'
+                ];
+                
+                let csvContent = headers.join(',') + '\\n';
+                
+                enhancedSignalsData.forEach(signal => {
+                    const row = [
+                        signal.timestamp,
+                        signal.signal_type,
+                        signal.price.toFixed(2),
+                        signal.stop_loss.toFixed(2),
+                        signal.take_profit.toFixed(2),
+                        (signal.fibonacci_level * 100).toFixed(1) + '%',
+                        signal.pattern_type,
+                        signal.pattern_strength,
+                        signal.quality,
+                        signal.confluence_score.toFixed(0),
+                        signal.risk_reward_ratio.toFixed(1),
+                        '"' + signal.factors.join('; ') + '"'
+                    ];
+                    csvContent += row.join(',') + '\\n';
+                });
+                
+                // Download CSV file
+                const blob = new Blob([csvContent], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `enhanced_signals_${new Date().toISOString().slice(0,19)}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                console.log(`Exported ${enhancedSignalsData.length} enhanced signals to CSV`);
+            }
+            
+            // =====================================
+            // SIGNAL PERFORMANCE ANALYTICS FUNCTIONS
+            // =====================================
+            
+            async function refreshSignalAnalytics() {
+                try {
+                    const response = await fetch('/api/signals/analytics');
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        updateSignalPerformancePanel(result.analytics);
+                    } else {
+                        console.error('Failed to fetch signal analytics:', result.message);
+                    }
+                } catch (error) {
+                    console.error('Error fetching signal analytics:', error);
+                }
+            }
+            
+            function updateSignalPerformancePanel(analytics) {
+                // Update real-time stats first
+                updateSignalPerformanceStats();
+                
+                if (!analytics || analytics.message) {
+                    document.getElementById('signalAnalyticsDetails').innerHTML = `
+                        <div style="color: #888; text-align: center; padding: 20px;">
+                            ${analytics?.message || 'No signal performance data available'}
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Build detailed analytics HTML
+                let analyticsHtml = '';
+                
+                // Overall performance
+                if (analytics.overall_performance) {
+                    const overall = analytics.overall_performance;
+                    analyticsHtml += `
+                        <div style="margin-bottom: 10px; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 4px;">
+                            <strong>Overall Performance:</strong><br>
+                            Total Signals: ${overall.total_signals}<br>
+                            Win Rate: ${(overall.overall_win_rate * 100).toFixed(1)}%<br>
+                            Active: ${overall.active_signals}
+                        </div>
+                    `;
+                }
+                
+                // Quality performance
+                if (analytics.quality_performance) {
+                    analyticsHtml += '<div style="margin-bottom: 10px;"><strong>Quality Breakdown:</strong><br>';
+                    Object.entries(analytics.quality_performance).forEach(([quality, data]) => {
+                        analyticsHtml += `
+                            <div style="margin-left: 10px; font-size: 0.9em;">
+                                ${quality.toUpperCase()}: ${data.count} signals, ${(data.win_rate * 100).toFixed(1)}% win rate
+                            </div>
+                        `;
+                    });
+                    analyticsHtml += '</div>';
+                }
+                
+                // Top patterns
+                if (analytics.pattern_ranking && analytics.pattern_ranking.length > 0) {
+                    analyticsHtml += '<div style="margin-bottom: 10px;"><strong>Top Patterns:</strong><br>';
+                    analytics.pattern_ranking.slice(0, 3).forEach(pattern => {
+                        analyticsHtml += `
+                            <div style="margin-left: 10px; font-size: 0.9em;">
+                                ${pattern.pattern}: ${(pattern.win_rate * 100).toFixed(1)}% (${pattern.total_signals})
+                            </div>
+                        `;
+                    });
+                    analyticsHtml += '</div>';
+                }
+                
+                // Confluence score analysis
+                if (analytics.confluence_score_analysis) {
+                    analyticsHtml += '<div><strong>Confluence Score Ranges:</strong><br>';
+                    Object.entries(analytics.confluence_score_analysis).forEach(([range, data]) => {
+                        analyticsHtml += `
+                            <div style="margin-left: 10px; font-size: 0.9em;">
+                                ${range}: ${(data.win_rate * 100).toFixed(1)}% (${data.count} signals)
+                            </div>
+                        `;
+                    });
+                    analyticsHtml += '</div>';
+                }
+                
+                // ML readiness
+                if (analytics.ml_features) {
+                    const ml = analytics.ml_features;
+                    analyticsHtml += `
+                        <div style="margin-top: 10px; padding: 8px; background: rgba(0,255,0,0.1); border-radius: 4px;">
+                            <strong>ML Readiness:</strong><br>
+                            Features: ${ml.feature_count}<br>
+                            Ready: ${ml.ready_for_ml ? 'Yes' : 'No (need 50+ signals)'}
+                        </div>
+                    `;
+                }
+                
+                document.getElementById('signalAnalyticsDetails').innerHTML = analyticsHtml;
+            }
+            
+            async function updateSignalPerformanceStats() {
+                try {
+                    const response = await fetch('/api/signals/performance/real-time');
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        const stats = result.stats;
+                        document.getElementById('activeSignalsCount').textContent = stats.active_signals;
+                        document.getElementById('completedSignalsCount').textContent = stats.completed_signals;
+                        document.getElementById('signalWinRate').textContent = stats.win_rate + '%';
+                        document.getElementById('avgBarsToResolution').textContent = stats.avg_bars_to_resolution;
+                    }
+                } catch (error) {
+                    console.error('Error updating signal performance stats:', error);
+                }
+            }
+            
+            async function exportSignalPerformance() {
+                try {
+                    const response = await fetch('/api/signals/performance/export');
+                    const result = await response.json();
+                    
+                    if (!result.success) {
+                        alert('Failed to export signal performance: ' + result.message);
+                        return;
+                    }
+                    
+                    if (result.data.length === 0) {
+                        alert('No signal performance data to export');
+                        return;
+                    }
+                    
+                    // Convert to CSV
+                    const headers = Object.keys(result.data[0]);
+                    let csvContent = headers.join(',') + '\\n';
+                    
+                    result.data.forEach(signal => {
+                        const row = headers.map(header => {
+                            const value = signal[header];
+                            if (typeof value === 'string' && value.includes(',')) {
+                                return '"' + value + '"';
+                            }
+                            return value;
+                        });
+                        csvContent += row.join(',') + '\\n';
+                    });
+                    
+                    // Download CSV file
+                    const blob = new Blob([csvContent], { type: 'text/csv' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `signal_performance_${new Date().toISOString().slice(0,19)}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    
+                    console.log(`Exported ${result.data.length} signal performance records to CSV`);
+                } catch (error) {
+                    console.error('Error exporting signal performance:', error);
+                    alert('Error exporting signal performance data');
+                }
             }
             
             async function loadData() {
@@ -3260,7 +4410,8 @@ async def get_research_dashboard():
                     swings: document.getElementById('showSwings') ? document.getElementById('showSwings').checked : 'not found',
                     fibonacci: document.getElementById('showFibonacci') ? document.getElementById('showFibonacci').checked : 'not found',
                     abc: document.getElementById('showABC') ? document.getElementById('showABC').checked : 'not found',
-                    signals: document.getElementById('showSignals') ? document.getElementById('showSignals').checked : 'not found'
+                    signals: document.getElementById('showSignals') ? document.getElementById('showSignals').checked : 'not found',
+                    enhancedSignals: document.getElementById('showEnhancedSignals') ? document.getElementById('showEnhancedSignals').checked : 'not found'
                 });
                 
                 if (!chart || !candlestickSeries) {
@@ -3282,7 +4433,7 @@ async def get_research_dashboard():
                     loadBacktestingEngine(symbolSelect.value, timeframeSelect.value, startDate, endDate)
                         .then(() => {
                             console.log('✅ Backend reloaded with new fractal periods');
-                            // Update display after backend reload
+                            // Update display after backend reload directly
                             updateAllMarkers();
                         })
                         .catch(error => {
@@ -3306,91 +4457,270 @@ async def get_research_dashboard():
                         lookbackManager.removeLookbackLine();
                     }
                 }
+
+                // Handle supply & demand zones refresh
+                if (supplyDemandManager) {
+                    supplyDemandManager.updateAllZones();
+                    console.log('🔄 Updated S&D zone rectangles');
+                }
                 
+                // Handle enhanced signals visibility (prevent flashing)
+                const showEnhancedSignals = document.getElementById('showEnhancedSignals') ? document.getElementById('showEnhancedSignals').checked : false;
+                if (!showEnhancedSignals) {
+                    // Hide enhanced signals but keep data
+                    clearEnhancedSignalLines();
+                    allMarkers = allMarkers.filter(marker => 
+                        !(marker.color === '#00ff88' || marker.color === '#ff4444')
+                    );
+                    if (candlestickSeries) {
+                        candlestickSeries.setMarkers(allMarkers);
+                    }
+                    console.log('🔄 Hidden enhanced signals');
+                } else if (enhancedSignalsData.length > 0) {
+                    // Re-show enhanced signals from cache without flashing
+                    console.log('🔄 Re-showing enhanced signals from cache');
+                    enhancedSignalsData.forEach(signal => {
+                        const signalTime = Math.floor(new Date(signal.timestamp).getTime() / 1000);
+                        const marker = {
+                            time: signalTime,
+                            position: signal.signal_type === 'buy' ? 'belowBar' : 'aboveBar',
+                            color: signal.signal_type === 'buy' ? '#00ff88' : '#ff4444',
+                            shape: signal.signal_type === 'buy' ? 'arrowUp' : 'arrowDown',
+                            text: `${signal.quality}\\n${signal.pattern_type}\\n${signal.confluence_score.toFixed(0)}%`,
+                            size: 4
+                        };
+                        const existingIndex = allMarkers.findIndex(m => m.time === marker.time && m.color === marker.color);
+                        if (existingIndex === -1) {
+                            allMarkers.push(marker);
+                        }
+                    });
+                    allMarkers.sort((a, b) => a.time - b.time);
+                    if (candlestickSeries) {
+                        candlestickSeries.setMarkers(allMarkers);
+                    }
+                }
+
                 console.log('✅ Chart elements refresh initiated');
             }
             
             // Supply & Demand Zone Control Functions
             function toggleSupplyDemandZones() {
-                console.log('📦 TOGGLING S&D ZONES - Function called!');
-                console.log('📦 supplyDemandManager exists:', !!supplyDemandManager);
+                const showZones = document.getElementById('showSupplyDemandZones').checked;
+                const debugPanel = document.getElementById('zoneDebugPanel');
                 
-                if (!supplyDemandManager) {
-                    console.error('❌ Supply & Demand manager not initialized!');
-                    updateStatus('❌ S&D manager not initialized');
-                    return;
+                // Show/hide debug panel
+                if (showZones) {
+                    debugPanel.style.display = 'block';
+                    updateZoneDebugInfo();
+                } else {
+                    debugPanel.style.display = 'none';
                 }
                 
-                const showZones = document.getElementById('showSupplyDemandZones').checked;
+                // Initialize manager if needed
+                if (!supplyDemandManager) {
+                    if (candlestickSeries) {
+                        try {
+                            supplyDemandManager = new SupplyDemandZoneManager(candlestickSeries);
+                            console.log('✅ S&D zone manager initialized');
+                        } catch (error) {
+                            console.error('❌ Failed to initialize S&D manager:', error);
+                            updateStatus('❌ Failed to initialize S&D manager');
+                            return;
+                        }
+                    } else {
+                        updateStatus('❌ Load chart data first');
+                        return;
+                    }
+                }
                 
                 if (showZones) {
-                    // Load zones if checkbox is checked and no zones loaded
-                    if (supplyDemandManager.zoneRectangles.length === 0) {
+                    // Load zones if not already loaded
+                    if (!supplyDemandManager.allZones || supplyDemandManager.allZones.length === 0) {
                         loadSupplyDemandZones();
                     } else {
-                        // Just show existing zones
-                        supplyDemandManager.zonesVisible = true;
-                        supplyDemandManager.zoneRectangles.forEach(rect => {
-                            rect.visible = true;
-                        });
-                        console.log('📦 Showed existing zones');
+                        supplyDemandManager.toggleZoneVisibility();
+                        updateZoneDebugInfo();
                     }
                 } else {
                     // Hide zones
-                    supplyDemandManager.zonesVisible = false;
-                    supplyDemandManager.zoneRectangles.forEach(rect => {
-                        rect.visible = false;
-                    });
-                    console.log('📦 Hidden zones');
+                    supplyDemandManager.toggleZoneVisibility();
                 }
                 
-                console.log(`✅ S&D zones ${showZones ? 'shown' : 'hidden'}`);
+                updateStatus(`📦 S&D zones ${showZones ? 'enabled' : 'disabled'}`);
+            }
+            
+            // Update Zone Debug Info Panel
+            function updateZoneDebugInfo() {
+                if (!supplyDemandManager) return;
+                
+                const currentBar = currentPosition || 0;
+                const currentTime = window.fullChartData && window.fullChartData[currentBar] 
+                    ? window.fullChartData[currentBar].time 
+                    : 0;
+                const currentTimeStr = currentTime ? new Date(currentTime * 1000).toISOString().substring(0, 19) : '-';
+                
+                // Chart data analysis
+                let chartDateRange = '-';
+                let chartPriceRange = '-';
+                if (window.fullChartData && window.fullChartData.length > 0) {
+                    const firstBar = window.fullChartData[0];
+                    const lastBar = window.fullChartData[window.fullChartData.length - 1];
+                    chartDateRange = `${new Date(firstBar.time * 1000).toISOString().substring(0, 10)} to ${new Date(lastBar.time * 1000).toISOString().substring(0, 10)}`;
+                    
+                    // Find price range
+                    let minPrice = firstBar.low;
+                    let maxPrice = firstBar.high;
+                    for (const bar of window.fullChartData) {
+                        if (bar.low < minPrice) minPrice = bar.low;
+                        if (bar.high > maxPrice) maxPrice = bar.high;
+                    }
+                    chartPriceRange = `${minPrice.toFixed(1)} - ${maxPrice.toFixed(1)}`;
+                }
+                
+                // Zone data analysis
+                let zoneDateRange = '-';
+                let zonePriceRange = '-';
+                let mismatchWarning = 'Checking...';
+                
+                if (supplyDemandManager.allZones && supplyDemandManager.allZones.length > 0) {
+                    const zones = supplyDemandManager.allZones;
+                    let earliestZone = zones[0];
+                    let latestZone = zones[0];
+                    let minZonePrice = zones[0].bottom_price;
+                    let maxZonePrice = zones[0].top_price;
+                    
+                    for (const zone of zones) {
+                        const zoneTime = supplyDemandManager.parseTime(zone.left_time);
+                        const earliestTime = supplyDemandManager.parseTime(earliestZone.left_time);
+                        const latestTime = supplyDemandManager.parseTime(latestZone.left_time);
+                        
+                        if (zoneTime < earliestTime) earliestZone = zone;
+                        if (zoneTime > latestTime) latestZone = zone;
+                        if (zone.bottom_price < minZonePrice) minZonePrice = zone.bottom_price;
+                        if (zone.top_price > maxZonePrice) maxZonePrice = zone.top_price;
+                    }
+                    
+                    zoneDateRange = `${new Date(supplyDemandManager.parseTime(earliestZone.left_time) * 1000).toISOString().substring(0, 10)} to ${new Date(supplyDemandManager.parseTime(latestZone.left_time) * 1000).toISOString().substring(0, 10)}`;
+                    zonePriceRange = `${minZonePrice.toFixed(1)} - ${maxZonePrice.toFixed(1)}`;
+                    
+                    // Check for mismatch
+                    if (window.fullChartData && window.fullChartData.length > 0) {
+                        const chartStartTime = window.fullChartData[0].time;
+                        const chartEndTime = window.fullChartData[window.fullChartData.length - 1].time;
+                        const zoneStartTime = supplyDemandManager.parseTime(earliestZone.left_time);
+                        const zoneEndTime = supplyDemandManager.parseTime(latestZone.left_time);
+                        
+                        if (zoneStartTime > chartEndTime || zoneEndTime < chartStartTime) {
+                            mismatchWarning = 'DATE MISMATCH! Zones are from different time period than chart data';
+                        } else {
+                            mismatchWarning = 'Dates align ✓';
+                        }
+                    }
+                }
+                
+                // Update debug panel
+                document.getElementById('debugCurrentBar').textContent = currentBar;
+                document.getElementById('debugCurrentTime').textContent = currentTimeStr;
+                document.getElementById('debugChartDateRange').textContent = chartDateRange;
+                document.getElementById('debugChartPriceRange').textContent = chartPriceRange;
+                document.getElementById('debugZonesLoaded').textContent = supplyDemandManager.allZones ? supplyDemandManager.allZones.length : 0;
+                document.getElementById('debugZonesVisible').textContent = supplyDemandManager.zoneLineSeries.size;
+                document.getElementById('debugZoneDateRange').textContent = zoneDateRange;
+                document.getElementById('debugZonePriceRange').textContent = zonePriceRange;
+                document.getElementById('debugMismatchWarning').textContent = mismatchWarning;
+                
+                // Find next zone
+                let nextZone = null;
+                if (supplyDemandManager.allZones) {
+                    for (const zone of supplyDemandManager.allZones) {
+                        const zoneTime = supplyDemandManager.parseTime(zone.left_time);
+                        if (zoneTime && zoneTime > currentTime) {
+                            if (!nextZone || zoneTime < supplyDemandManager.parseTime(nextZone.left_time)) {
+                                nextZone = zone;
+                            }
+                        }
+                    }
+                }
+                
+                if (nextZone) {
+                    const nextZoneTime = new Date(supplyDemandManager.parseTime(nextZone.left_time) * 1000).toISOString().substring(0, 19);
+                    document.getElementById('debugNextZone').textContent = `${nextZone.zone_type} at ${nextZoneTime}`;
+                } else {
+                    document.getElementById('debugNextZone').textContent = 'None in current timeframe';
+                }
+            }
+            
+            // Add zone event to debug log
+            function addZoneDebugEvent(message) {
+                const debugEvents = document.getElementById('debugZoneEvents');
+                const time = new Date().toISOString().substring(11, 19);
+                debugEvents.innerHTML = `<div>${time}: ${message}</div>` + debugEvents.innerHTML;
+                
+                // Keep only last 5 events
+                const events = debugEvents.children;
+                while (events.length > 5) {
+                    debugEvents.removeChild(events[events.length - 1]);
+                }
+            }
+            
+            // Toggle sidebar section collapse
+            function toggleSection(headerElement) {
+                const section = headerElement.parentElement;
+                section.classList.toggle('collapsed');
             }
             
             async function loadSupplyDemandZones() {
-                console.log('📦 Loading Supply & Demand zones...');
-                
                 try {
                     // Get current form values
                     const symbol = document.getElementById('symbolSelect').value;
                     const timeframe = document.getElementById('timeframeSelect').value;
-                    
+
                     if (!symbol || !timeframe) {
                         console.warn('Symbol or timeframe not selected');
                         updateStatus('⚠️ Please select symbol and timeframe first');
                         return;
                     }
-                    
+
                     // Show loading status
                     updateStatus('📦 Loading supply & demand zones...');
-                    
-                    // Call the zones API (this endpoint may not exist yet, but we'll prepare for it)
-                    const url = `/api/supply-demand/zones?symbol=${symbol}&timeframe=${timeframe}&limit=100`;
+
+                    // Call the zones API
+                    const url = `/api/supply-demand/zones?symbol=${symbol}&timeframe=${timeframe}&limit=50`;
                     const response = await fetch(url);
-                    
+
                     if (response.ok) {
                         const result = await response.json();
-                        
-                        if (result.success && result.zones) {
-                            console.log(`📦 Loaded ${result.zones.length} S&D zones from API`);
-                            
-                            // Load zones into the manager
+
+                        if (result.success && result.zones && result.zones.length > 0) {
+                            // Store zones for dynamic display during replay
                             if (supplyDemandManager) {
-                                supplyDemandManager.loadAllZones(result.zones);
-                                updateStatus(`✅ Loaded ${result.zones.length} supply & demand zones`);
+                                // Store all zones but DON'T display them yet - they appear only during replay navigation
+                                supplyDemandManager.storeZonesForDynamicDisplay(result.zones);
+                                
+                                // DO NOT call updateDynamicZoneDisplay here - zones should only appear during replay
+                                updateStatus(`✅ Loaded ${result.zones.length} S&D zones for dynamic display. Use replay controls to see zones appear.`);
+                                
+                                // Update debug info (will show 0 visible zones until replay starts)
+                                updateZoneDebugInfo();
+                                
+                                // Add debug event
+                                addZoneDebugEvent(`Zones loaded. Start replay to see them appear at detection points.`);
+                            } else {
+                                console.error('❌ Supply & Demand manager not initialized!');
+                                updateStatus('❌ S&D manager not initialized');
                             }
                         } else {
                             console.warn('No zones returned from API');
                             updateStatus('⚠️ No S&D zones found for current symbol/timeframe');
                         }
                     } else {
-                        // API endpoint doesn't exist yet - create demo zones
-                        console.log('📦 API not available, creating demo zones...');
-                        createDemoSupplyDemandZones();
+                        const errorText = await response.text();
+                        console.error('API error:', response.status, errorText);
+                        updateStatus(`❌ API error: ${response.status}`);
                     }
                 } catch (error) {
-                    console.warn('S&D API not available, creating demo zones:', error);
-                    createDemoSupplyDemandZones();
+                    console.error('Error loading S&D zones:', error);
+                    updateStatus(`❌ Error loading zones: ${error.message}`);
                 }
             }
             
@@ -3480,6 +4810,14 @@ async def get_research_dashboard():
                         // Clear existing markers first to avoid duplication
                         allMarkers = [];
                         
+                        // Only clear enhanced signals if loading completely new data
+                        // (not just navigating through existing data)
+                        const isNewDataLoad = true; // This happens only on fresh data load
+                        if (isNewDataLoad) {
+                            console.log('🔄 Loading new data - clearing enhanced signals');
+                            clearAllEnhancedSignals();
+                        }
+                        
                         // Add fractals to chart if checkbox is checked
                         if (fractalsResult.fractals.length > 0 && document.getElementById('showFractals').checked) {
                             console.log('📍 Processing fractals for chart display...');
@@ -3542,6 +4880,7 @@ async def get_research_dashboard():
                     if (signalsResult.success && document.getElementById('showSignals').checked) {
                         addSignalsToChart(signalsResult.signals);
                         document.getElementById('signalCount').textContent = signalsResult.count;
+                        document.getElementById('enhancedSignalCount').textContent = 0; // Reset enhanced signals for new data load
                     }
                     
                 } catch (error) {
@@ -3627,6 +4966,12 @@ async def get_research_dashboard():
 
                     // Update chart progressively to show only bars up to current position
                     updateChartProgressive(currentPosition);
+                    
+                    // Update Supply & Demand zones dynamically (MT4 style - zones appear as replay reaches them)
+                    if (supplyDemandManager && supplyDemandManager.allZones && supplyDemandManager.allZones.length > 0) {
+                        supplyDemandManager.updateDynamicZoneDisplay(currentPosition);
+                        updateZoneDebugInfo();
+                    }
 
                     // Update UI displays
                     updatePositionDisplay();
@@ -3681,6 +5026,7 @@ async def get_research_dashboard():
                                 document.getElementById('fractalCount').textContent = results.total_fractals || 0;
                                 document.getElementById('swingCount').textContent = results.total_swings || 0;
                                 document.getElementById('signalCount').textContent = results.total_signals || 0;
+                                document.getElementById('enhancedSignalCount').textContent = results.total_enhanced_signals || 0;
                                 document.getElementById('abcPatternCount').textContent = results.total_abc_patterns || 0;
                                 
                                 // Real fractal processing will be handled by the backend strategy results
@@ -3715,7 +5061,7 @@ async def get_research_dashboard():
                     const userTotalBars = totalBars - window.userStartOffset;
                     updateStatus(`📊 Bar ${currentPosition + 1}/${userTotalBars} - ${marketData[dataPosition]?.timestamp || 'N/A'}`);
                     
-                    // Update all markers after replay action
+                    // ✅ RESTORED: Direct marker updates for continuous visibility
                     updateAllMarkers();
                     
                 } catch (error) {
@@ -3789,6 +5135,7 @@ async def get_research_dashboard():
                                 document.getElementById('fractalCount').textContent = results.total_fractals || 0;
                                 document.getElementById('swingCount').textContent = results.total_swings || 0;
                                 document.getElementById('signalCount').textContent = results.total_signals || 0;
+                                document.getElementById('enhancedSignalCount').textContent = results.total_enhanced_signals || 0;
                                 document.getElementById('abcPatternCount').textContent = results.total_abc_patterns || 0;
                                 
                                 // Add visual elements during auto-replay ONLY if checkboxes are checked
@@ -5260,18 +6607,257 @@ async def reset_backtest():
     """Reset backtesting engine to beginning."""
     try:
         backtesting_engine.reset()
-        
+
         return JSONResponse({
             "success": True,
             "message": "Backtesting engine reset"
         })
-        
+
     except Exception as e:
         logger.error(f"Error resetting backtest: {e}")
         return JSONResponse({
             "success": False,
             "message": str(e)
         })
+
+# =====================================
+# SIGNAL PERFORMANCE ANALYTICS ENDPOINTS
+# =====================================
+
+@app.get("/api/signals/analytics")
+async def get_signal_analytics():
+    """Get comprehensive signal performance analytics for ML/AI development."""
+    try:
+        analytics = backtesting_engine.strategy.get_signal_analytics()
+        
+        return JSONResponse({
+            "success": True,
+            "analytics": analytics
+        })
+    
+    except Exception as e:
+        logger.error(f"Error getting signal analytics: {e}")
+        return JSONResponse({
+            "success": False,
+            "message": str(e)
+        })
+
+@app.get("/api/signals/performance/export")
+async def export_signal_performance():
+    """Export signal performance data for external analysis."""
+    try:
+        performance_df = backtesting_engine.strategy.export_signal_performance_data()
+        
+        if performance_df.empty:
+            return JSONResponse({
+                "success": True,
+                "data": [],
+                "message": "No signal performance data available"
+            })
+        
+        # Convert DataFrame to JSON
+        performance_data = performance_df.to_dict('records')
+        
+        return JSONResponse({
+            "success": True,
+            "data": performance_data,
+            "total_signals": len(performance_data)
+        })
+    
+    except Exception as e:
+        logger.error(f"Error exporting signal performance: {e}")
+        return JSONResponse({
+            "success": False,
+            "message": str(e)
+        })
+
+@app.get("/api/signals/performance/real-time")
+async def get_real_time_signal_performance():
+    """Get real-time signal performance statistics."""
+    try:
+        stats = backtesting_engine.strategy.signal_performance_tracker.get_real_time_stats()
+        
+        return JSONResponse({
+            "success": True,
+            "stats": stats
+        })
+    
+    except Exception as e:
+        logger.error(f"Error getting real-time signal performance: {e}")
+        return JSONResponse({
+            "success": False,
+            "message": str(e)
+        })
+
+# =====================================
+# SUPPLY & DEMAND ZONES ENDPOINTS
+# =====================================
+
+@app.get("/api/supply-demand/zones")
+async def get_supply_demand_zones(
+    symbol: str = Query(...),
+    timeframe: str = Query(...),
+    limit: int = Query(50, description="Maximum number of zones to return")
+):
+    """Get supply and demand zones for symbol and timeframe."""
+    try:
+        logger.info(f"🔄 Getting S&D zones: {symbol} {timeframe} (limit: {limit})")
+
+        # For now, create demo zones based on current market data
+        # In the future, this will use the actual SupplyDemandZoneDetector
+
+        db_manager = get_database_manager()
+        if not db_manager:
+            raise HTTPException(status_code=500, detail="Database not available")
+
+        # Get recent market data for zone detection
+        with db_manager.get_session() as session:
+            # Query recent data (last 1000 bars for zone detection)
+            query = text("""
+                SELECT timestamp, open, high, low, close, volume
+                FROM historical_data
+                WHERE symbol = :symbol
+                AND timeframe = :timeframe
+                ORDER BY timestamp DESC
+                LIMIT 1000
+            """)
+
+            result = session.execute(query, {
+                'symbol': symbol,
+                'timeframe': timeframe
+            })
+
+            rows = result.fetchall()
+
+            if not rows:
+                return JSONResponse({
+                    "success": True,
+                    "zones": [],
+                    "message": f"No market data found for {symbol} {timeframe}"
+                })
+
+            # Convert to DataFrame for zone detection
+            import pandas as pd
+            df = pd.DataFrame([{
+                'timestamp': row[0],
+                'open': float(row[1]),
+                'high': float(row[2]),
+                'low': float(row[3]),
+                'close': float(row[4]),
+                'volume': float(row[5]) if row[5] else 0.0
+            } for row in rows])
+
+            # Reverse to chronological order
+            df = df.iloc[::-1].reset_index(drop=True)
+
+            # Create demo zones based on price action
+            zones = create_demo_zones_from_data(df, symbol, timeframe, limit)
+
+            logger.info(f"✅ Generated {len(zones)} S&D zones for {symbol} {timeframe}")
+
+            return JSONResponse({
+                "success": True,
+                "zones": zones,
+                "count": len(zones)
+            })
+
+    except Exception as e:
+        logger.error(f"Error getting S&D zones: {e}")
+        return JSONResponse({
+            "success": False,
+            "message": str(e),
+            "zones": []
+        })
+
+def create_demo_zones_from_data(df, symbol, timeframe, limit):
+    """Create demo supply and demand zones from market data."""
+    zones = []
+
+    if len(df) < 50:
+        return zones
+
+    try:
+        # Find significant highs and lows for zone creation
+        window = 20
+
+        # Find local highs (potential supply zones)
+        for i in range(window, len(df) - window):
+            current_high = df.iloc[i]['high']
+
+            # Check if this is a local high
+            is_local_high = True
+            for j in range(i - window, i + window + 1):
+                if j != i and df.iloc[j]['high'] >= current_high:
+                    is_local_high = False
+                    break
+
+            if is_local_high and len([z for z in zones if z['zone_type'] == 'supply']) < limit // 2:
+                # Create supply zone
+                zone_height = current_high * 0.002  # 0.2% zone height
+                zones.append({
+                    'id': f"supply_{symbol}_{i}",
+                    'symbol': symbol,
+                    'timeframe': timeframe,
+                    'zone_type': 'supply',
+                    'top_price': current_high + zone_height,
+                    'bottom_price': current_high - zone_height,
+                    'left_time': df.iloc[max(0, i-10)]['timestamp'],
+                    'right_time': df.iloc[min(len(df)-1, i+10)]['timestamp'],
+                    'strength_score': 0.6 + (abs(current_high - df.iloc[i]['close']) / current_high) * 2,
+                    'status': 'active',
+                    'test_count': 0,
+                    'created_at': df.iloc[i]['timestamp']
+                })
+
+        # Find local lows (potential demand zones)
+        for i in range(window, len(df) - window):
+            current_low = df.iloc[i]['low']
+
+            # Check if this is a local low
+            is_local_low = True
+            for j in range(i - window, i + window + 1):
+                if j != i and df.iloc[j]['low'] <= current_low:
+                    is_local_low = False
+                    break
+
+            if is_local_low and len([z for z in zones if z['zone_type'] == 'demand']) < limit // 2:
+                # Create demand zone
+                zone_height = current_low * 0.002  # 0.2% zone height
+                zones.append({
+                    'id': f"demand_{symbol}_{i}",
+                    'symbol': symbol,
+                    'timeframe': timeframe,
+                    'zone_type': 'demand',
+                    'top_price': current_low + zone_height,
+                    'bottom_price': current_low - zone_height,
+                    'left_time': df.iloc[max(0, i-10)]['timestamp'],
+                    'right_time': df.iloc[min(len(df)-1, i+10)]['timestamp'],
+                    'strength_score': 0.6 + (abs(df.iloc[i]['close'] - current_low) / current_low) * 2,
+                    'status': 'active',
+                    'test_count': 0,
+                    'created_at': df.iloc[i]['timestamp']
+                })
+
+        # Sort zones by strength score (strongest first)
+        zones.sort(key=lambda x: x['strength_score'], reverse=True)
+
+        # Limit to requested number
+        zones = zones[:limit]
+
+        # Convert timestamps to ISO format for frontend
+        for zone in zones:
+            if hasattr(zone['left_time'], 'isoformat'):
+                zone['left_time'] = zone['left_time'].isoformat()
+            if hasattr(zone['right_time'], 'isoformat'):
+                zone['right_time'] = zone['right_time'].isoformat()
+            if hasattr(zone['created_at'], 'isoformat'):
+                zone['created_at'] = zone['created_at'].isoformat()
+
+        return zones
+
+    except Exception as e:
+        logger.error(f"Error creating demo zones: {e}")
+        return []
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

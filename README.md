@@ -24,7 +24,8 @@ A sophisticated trading system implementing Elliott Wave theory with ABC correct
 
 ### ✅ **Research Dashboard**
 - **Visual Backtesting**: Interactive chart with fractal, swing, and ABC pattern visualization
-- **Real-time Updates**: Live pattern detection and market bias updates
+- **Enhanced Signal Generation**: Pattern confirmation at Fibonacci levels with quality scoring
+- **Signal Performance Analytics**: Real-time tracking and ML-ready data export
 - **Progressive Backtesting**: Step-through historical data analysis
 - **Chart Tools**: Zoom, pan, time navigation, and pattern toggles
 

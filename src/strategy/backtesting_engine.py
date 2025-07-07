@@ -9,7 +9,8 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 import logging
 
-from .fibonacci_strategy import FibonacciStrategy, TradingSignal
+from .fibonacci_strategy import FibonacciStrategy
+from .trading_types import TradingSignal
 
 logger = logging.getLogger(__name__)
 

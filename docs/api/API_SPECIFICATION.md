@@ -428,6 +428,149 @@ Response:
 **Description**: Get risk management metrics  
 **Authentication**: JWT Token  
 
+### Signal Performance Analytics
+
+#### GET /signals/analytics
+**Description**: Get comprehensive signal performance analytics for ML/AI development  
+**Authentication**: JWT Token  
+**Parameters**: None
+
+**Response**:
+```json
+{
+  "overall_performance": {
+    "total_signals": 45,
+    "overall_win_rate": 0.667,
+    "active_signals": 3
+  },
+  "quality_performance": {
+    "weak": {
+      "count": 8,
+      "win_rate": 0.375,
+      "avg_confluence_score": 35.2,
+      "avg_pnl": -12.5
+    },
+    "moderate": {
+      "count": 22,
+      "win_rate": 0.636,
+      "avg_confluence_score": 58.7,
+      "avg_pnl": 45.3
+    },
+    "strong": {
+      "count": 15,
+      "win_rate": 0.867,
+      "avg_confluence_score": 82.1,
+      "avg_pnl": 78.9
+    }
+  },
+  "pattern_ranking": [
+    {
+      "pattern": "bullish_engulfing_strong",
+      "win_rate": 0.89,
+      "avg_pnl": 65.4,
+      "total_signals": 9,
+      "avg_confluence_score": 78.3
+    }
+  ],
+  "confluence_score_analysis": {
+    "0-40": {
+      "count": 8,
+      "win_rate": 0.375,
+      "avg_pnl": -12.5
+    },
+    "40-60": {
+      "count": 15,
+      "win_rate": 0.600,
+      "avg_pnl": 23.7
+    },
+    "60-80": {
+      "count": 12,
+      "win_rate": 0.750,
+      "avg_pnl": 56.2
+    },
+    "80-100": {
+      "count": 10,
+      "win_rate": 0.900,
+      "avg_pnl": 89.3
+    }
+  },
+  "ml_features": {
+    "feature_count": 45,
+    "feature_names": [
+      "fibonacci_level",
+      "confluence_score", 
+      "pattern_type_encoded",
+      "pattern_strength_encoded",
+      "quality_encoded",
+      "num_factors",
+      "signal_type_encoded"
+    ],
+    "label_distribution": {
+      "wins": 30,
+      "losses": 15
+    },
+    "ready_for_ml": false
+  }
+}
+```
+
+#### GET /signals/performance/export
+**Description**: Export signal performance data for external analysis  
+**Authentication**: JWT Token  
+**Parameters**: None
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "signal_id": "2025-07-07T10:30:00_1.0850",
+      "timestamp": "2025-07-07T10:30:00Z",
+      "signal_type": "buy",
+      "entry_price": 1.0850,
+      "stop_loss": 1.0820,
+      "take_profit": 1.0920,
+      "fibonacci_level": 0.618,
+      "pattern_type": "bullish_engulfing",
+      "pattern_strength": "strong",
+      "confluence_score": 78.5,
+      "quality": "strong",
+      "factors": ["Key Fibonacci level (61.8%)", "bullish_engulfing pattern"],
+      "max_favorable_move": 45.0,
+      "max_adverse_move": -8.0,
+      "bars_to_target": 23,
+      "final_outcome": "target_hit",
+      "actual_pnl": 70.0,
+      "performance_1h": 12.5,
+      "performance_4h": 45.0,
+      "performance_24h": 70.0,
+      "signal_efficiency": 1.95,
+      "drawdown_ratio": 0.18
+    }
+  ],
+  "total_signals": 45
+}
+```
+
+#### GET /signals/performance/real-time
+**Description**: Get real-time signal performance statistics  
+**Authentication**: JWT Token  
+**Parameters**: None
+
+**Response**:
+```json
+{
+  "success": true,
+  "stats": {
+    "active_signals": 3,
+    "completed_signals": 42,
+    "win_rate": 66.7,
+    "avg_bars_to_resolution": 28.5
+  }
+}
+```
+
 ### Configuration
 
 #### GET /config
