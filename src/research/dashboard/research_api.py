@@ -933,8 +933,7 @@ async def get_research_dashboard():
             let swingSeries = null;
             let fibonacciSeries = null;
             let signalSeries = null;
-            let allMarkers = []; // Global array to store all markers
-            window.allMarkers = allMarkers; // Make globally accessible for batcher
+            // Legacy allMarkers array removed - now using UnifiedMarkerManager
             let enhancedSignalsData = []; // Global array to store enhanced signals for panel
             let enhancedSignalLines = []; // Global array to store price line references
             
@@ -1001,90 +1000,172 @@ async def get_research_dashboard():
             // Make accumulated data globally accessible for batcher
             window.accumulatedFractals = accumulatedFractals;
             
-            // ✅ PROPER TRADINGVIEW MARKER MANAGEMENT
-            class FractalMarkerManager {
+            // ✅ UNIFIED MARKER MANAGEMENT SYSTEM - Eliminates flashing and race conditions
+            class UnifiedMarkerManager {
                 constructor(candlestickSeries) {
                     this.series = candlestickSeries;
-                    this.fractalMarkers = []; // Store all fractal markers
-                    this.otherMarkers = []; // Store non-fractal markers
+                    this.markers = new Map(); // Use Map for efficient marker management by unique ID
+                    this.updatePending = false;
+                    this.updateTimeout = null;
                 }
-                
-                addFractal(fractal) {
-                    // Convert fractal to proper TradingView marker format
-                    const marker = {
-                        time: Math.floor(new Date(fractal.timestamp).getTime() / 1000), // Unix timestamp
-                        position: fractal.fractal_type === 'high' ? 'aboveBar' : 'belowBar',
-                        color: fractal.fractal_type === 'high' ? '#ff4444' : '#00bcd4',
-                        shape: fractal.fractal_type === 'high' ? 'arrowUp' : 'arrowDown', // Fixed directions
-                        text: '', // No text for clean display
-                        id: `fractal-${fractal.bar_index || fractal.timestamp}`
-                    };
-                    
-                    // Check if marker already exists
-                    const existingIndex = this.fractalMarkers.findIndex(m => m.id === marker.id);
-                    if (existingIndex === -1) {
-                        this.fractalMarkers.push(marker);
-                        console.log(`✅ Added ${fractal.fractal_type} fractal marker at ${fractal.timestamp}`);
+
+                // Add or update a marker by unique ID
+                setMarker(id, markerData) {
+                    if (!markerData || !id) return;
+
+                    this.markers.set(id, {
+                        ...markerData,
+                        id: id
+                    });
+
+                    this.scheduleUpdate();
+                }
+
+                // Add multiple markers at once
+                setMarkers(markersArray, idPrefix = '') {
+                    if (!Array.isArray(markersArray)) return;
+
+                    markersArray.forEach((marker, index) => {
+                        const id = marker.id || `${idPrefix}_${marker.time}_${index}`;
+                        this.setMarker(id, marker);
+                    });
+                }
+
+                // Remove marker by ID
+                removeMarker(id) {
+                    if (this.markers.has(id)) {
+                        this.markers.delete(id);
+                        this.scheduleUpdate();
                     }
-                    
-                    this.updateChart();
                 }
-                
-                loadAllFractals(fractals) {
-                    // Convert all fractals to markers
-                    this.fractalMarkers = fractals.map(fractal => ({
+
+                // Remove markers by pattern (e.g., all fractals, all signals)
+                removeMarkersByPattern(pattern) {
+                    let removed = 0;
+                    for (const [id, marker] of this.markers) {
+                        if (id.includes(pattern)) {
+                            this.markers.delete(id);
+                            removed++;
+                        }
+                    }
+                    if (removed > 0) {
+                        this.scheduleUpdate();
+                        console.log(`🗑️ Removed ${removed} markers matching pattern: ${pattern}`);
+                    }
+                }
+
+                // Clear all markers
+                clearAll() {
+                    this.markers.clear();
+                    this.scheduleUpdate();
+                }
+
+                // Get current marker count
+                getMarkerCount() {
+                    return this.markers.size;
+                }
+
+                // Schedule a batched update to prevent flashing
+                scheduleUpdate() {
+                    if (this.updateTimeout) {
+                        clearTimeout(this.updateTimeout);
+                    }
+
+                    // Batch updates with delay to prevent flashing and coordinate with ChartUpdateBatcher
+                    this.updateTimeout = setTimeout(() => {
+                        this.performUpdate();
+                    }, 20); // 20ms delay - longer than ChartUpdateBatcher to avoid conflicts
+                }
+
+                // Force immediate update
+                forceUpdate() {
+                    if (this.updateTimeout) {
+                        clearTimeout(this.updateTimeout);
+                        this.updateTimeout = null;
+                    }
+                    this.performUpdate();
+                }
+
+                // Perform the actual chart update
+                performUpdate() {
+                    if (!this.series) return;
+
+                    // Convert Map to array and sort by time
+                    const markersArray = Array.from(this.markers.values());
+                    markersArray.sort((a, b) => a.time - b.time);
+
+                    // Single setMarkers call - no flashing
+                    this.series.setMarkers(markersArray);
+
+                    // SILENT MODE: Only log errors, not routine updates to eliminate console spam
+                    // if (markersArray.length > 0) {
+                    //     console.log(`📍 UnifiedMarkerManager: Updated chart with ${markersArray.length} markers`);
+                    // }
+                    this.updateTimeout = null;
+                }
+
+                // Helper methods for specific marker types
+                addFractal(fractal) {
+                    if (!fractal) return;
+
+                    const id = `fractal_${fractal.timestamp}_${fractal.fractal_type}`;
+                    const marker = {
                         time: Math.floor(new Date(fractal.timestamp).getTime() / 1000),
                         position: fractal.fractal_type === 'high' ? 'aboveBar' : 'belowBar',
                         color: fractal.fractal_type === 'high' ? '#ff4444' : '#00bcd4',
                         shape: fractal.fractal_type === 'high' ? 'arrowUp' : 'arrowDown',
                         text: '',
-                        id: `fractal-${fractal.bar_index || fractal.timestamp}`
-                    }));
-                    
-                    console.log(`📍 Loaded ${this.fractalMarkers.length} fractal markers`);
-                    this.updateChart();
+                        size: 2
+                    };
+
+                    this.setMarker(id, marker);
                 }
-                
-                clearFractals() {
-                    this.fractalMarkers = [];
-                    this.updateChart();
+
+                addSignal(signal, signalType = 'signal') {
+                    if (!signal) return;
+
+                    const id = `${signalType}_${signal.timestamp}_${signal.signal_type || 'unknown'}`;
+                    const marker = {
+                        time: Math.floor(new Date(signal.timestamp).getTime() / 1000),
+                        position: signal.signal_type === 'buy' ? 'belowBar' : 'aboveBar',
+                        color: signal.signal_type === 'buy' ? '#00ff88' : '#ff4444',
+                        shape: signal.signal_type === 'buy' ? 'arrowUp' : 'arrowDown',
+                        text: signal.text || '',
+                        size: signal.size || 2
+                    };
+
+                    this.setMarker(id, marker);
                 }
-                
-                updateChart() {
-                    // ✅ RESTORED: Direct marker updates for fractals (they should stay visible continuously)
-                    // Fractals are static once detected and don't cause flashing like dynamic signals
-                    
-                    // Combine fractal markers with any other accumulated markers from global array
-                    const allCurrentMarkers = [...this.fractalMarkers];
-                    
-                    // Add any other markers from global allMarkers that aren't fractals
-                    if (window.allMarkers) {
-                        const nonFractalMarkers = window.allMarkers.filter(marker => 
-                            !marker.id || !marker.id.startsWith('fractal-')
-                        );
-                        allCurrentMarkers.push(...nonFractalMarkers);
-                    }
-                    
-                    // Remove duplicates by time and type
-                    const uniqueMarkers = [];
-                    const seen = new Set();
-                    allCurrentMarkers.forEach(marker => {
-                        const key = `${marker.time}_${marker.shape}_${marker.color}`;
-                        if (!seen.has(key)) {
-                            seen.add(key);
-                            uniqueMarkers.push(marker);
-                        }
-                    });
-                    
-                    // Sort and set markers immediately
-                    uniqueMarkers.sort((a, b) => a.time - b.time);
-                    this.series.setMarkers(uniqueMarkers);
-                    
-                    console.log(`📍 FractalMarkerManager: Direct update with ${uniqueMarkers.length} total markers (${this.fractalMarkers.length} fractals)`);
+
+                loadFractals(fractals) {
+                    if (!Array.isArray(fractals)) return;
+
+                    // Remove existing fractals first
+                    this.removeMarkersByPattern('fractal_');
+
+                    // Add all fractals
+                    fractals.forEach(fractal => this.addFractal(fractal));
+
+                    // Silenced: console.log(`📍 Loaded ${fractals.length} fractals into unified manager`);
+                }
+
+                loadSignals(signals, signalType = 'signal') {
+                    if (!Array.isArray(signals)) return;
+
+                    // Remove existing signals of this type first
+                    this.removeMarkersByPattern(signalType + '_');
+
+                    // Add all signals
+                    signals.forEach(signal => this.addSignal(signal, signalType));
+
+                    // Silenced: console.log(`📍 Loaded ${signals.length} ${signalType} signals into unified manager`);
                 }
             }
-            
-            // Global marker manager instance
+
+            // Global unified marker manager instance
+            let unifiedMarkerManager = null;
+
+            // Legacy compatibility - keep for backward compatibility during transition
             let fractalManager = null;
             
             let swingLineManager = null;
@@ -2054,15 +2135,16 @@ async def get_research_dashboard():
                     this.isProcessing = true;
                     
                     try {
-                        console.log('🎯 BATCH UPDATE: Processing batched chart updates...', {
-                            fractals: this.pendingUpdates.fractals.length,
-                            swings: this.pendingUpdates.swings.length,
-                            fibonacci: !!this.pendingUpdates.fibonacci,
-                            abc_patterns: !!this.pendingUpdates.abc_patterns.patterns,
-                            signals: this.pendingUpdates.signals.length,
-                            enhanced_signals: this.pendingUpdates.enhanced_signals.length,
-                            markers: this.pendingUpdates.markers
-                        });
+                        // SILENCED: Excessive batch update logging disabled
+                        // console.log('🎯 BATCH UPDATE: Processing batched chart updates...', {
+                        //     fractals: this.pendingUpdates.fractals.length,
+                        //     swings: this.pendingUpdates.swings.length,
+                        //     fibonacci: !!this.pendingUpdates.fibonacci,
+                        //     abc_patterns: !!this.pendingUpdates.abc_patterns.patterns,
+                        //     signals: this.pendingUpdates.signals.length,
+                        //     enhanced_signals: this.pendingUpdates.enhanced_signals.length,
+                        //     markers: this.pendingUpdates.markers
+                        // });
                         
                         // 1. Process fractals (accumulate and sync)
                         if (this.pendingUpdates.fractals.length > 0) {
@@ -2076,7 +2158,7 @@ async def get_research_dashboard():
                                     accumulatedFractals.push(fractal);
                                 }
                             });
-                            console.log(`🔺 Batched: ${this.pendingUpdates.fractals.length} fractals (total: ${window.accumulatedFractals.length})`);
+                            // Silenced: console.log(`🔺 Batched: ${this.pendingUpdates.fractals.length} fractals (total: ${window.accumulatedFractals.length})`);
                             
                             // Update fractal manager directly
                             if (fractalManager && document.getElementById('showFractals').checked) {
@@ -2101,7 +2183,7 @@ async def get_research_dashboard():
                             if (document.getElementById('showSwings').checked && swingLineManager) {
                                 swingLineManager.loadAllSwings(accumulatedSwings);
                             }
-                            console.log(`📈 Batched: ${this.pendingUpdates.swings.length} swings`);
+                            // Silenced: console.log(`📈 Batched: ${this.pendingUpdates.swings.length} swings`);
                         }
                         
                         // 3. Process Fibonacci levels (update once)
@@ -2113,7 +2195,7 @@ async def get_research_dashboard():
                             if (document.getElementById('showFibonacci').checked && fibonacciManager) {
                                 fibonacciManager.updateFibonacciLevels(fibLevels, dominantSwing);
                             }
-                            console.log(`📐 Batched: Fibonacci levels updated`);
+                            // Silenced: console.log(`📐 Batched: Fibonacci levels updated`);
                         }
                         
                         // 4. Process ABC patterns (update once)
@@ -2124,7 +2206,7 @@ async def get_research_dashboard():
                             if (document.getElementById('showABC') && document.getElementById('showABC').checked && abcPatternManager) {
                                 abcPatternManager.loadAllABCPatterns(patterns, dominantSwing);
                             }
-                            console.log(`🌊 Batched: ABC patterns updated`);
+                            // Silenced: console.log(`🌊 Batched: ABC patterns updated`);
                         }
                         
                         // 5. Build complete marker collection
@@ -2149,7 +2231,7 @@ async def get_research_dashboard():
                                     shouldUpdateMarkers = true;
                                 }
                             });
-                            console.log(`📊 Batched: ${this.pendingUpdates.signals.length} signals`);
+                            // Silenced: console.log(`📊 Batched: ${this.pendingUpdates.signals.length} signals`);
                         }
                         
                         // Add enhanced signal markers
@@ -2172,35 +2254,32 @@ async def get_research_dashboard():
                                     shouldUpdateMarkers = true;
                                 }
                             });
-                            console.log(`⭐ Batched: ${this.pendingUpdates.enhanced_signals.length} enhanced signals`);
+                            // Silenced: console.log(`⭐ Batched: ${this.pendingUpdates.enhanced_signals.length} enhanced signals`);
                         }
                         
-                        // 6. Skip fractal markers - handled directly by FractalMarkerManager
-                        // Fractals are now managed by direct updates for continuous visibility
-                        console.log(`🔺 Batched: Skipping fractals (handled by FractalMarkerManager directly)`);
+                        // 6. Handle fractal markers through unified manager
+                        if (this.pendingUpdates.fractals.length > 0 && window.unifiedMarkerManager) {
+                            // Add new fractals through unified manager
+                            this.pendingUpdates.fractals.forEach(fractal => {
+                                window.unifiedMarkerManager.addFractal(fractal);
+                            });
+                            // Silenced: console.log(`🔺 Batched: Added ${this.pendingUpdates.fractals.length} fractals through unified manager`);
+                        }
                         
-                        // 7. Update global signal markers array only (no direct setMarkers calls)
-                        if (shouldUpdateMarkers) {
-                            // Sort and update global array for signal markers only
-                            finalMarkers.sort((a, b) => a.time - b.time);
-                            
-                            // Update global allMarkers array for signal markers (FractalMarkerManager will combine)
-                            if (window.allMarkers) {
-                                // Remove old signal markers and add new ones
-                                window.allMarkers = window.allMarkers.filter(marker => 
-                                    marker.size !== 2 && marker.size !== 4 // Remove old signals
-                                );
-                                window.allMarkers.push(...finalMarkers);
-                            } else {
-                                window.allMarkers = finalMarkers;
-                            }
-                            
-                            console.log(`🎯 Batched: Updated signal markers in global array (${finalMarkers.length} signals)`);
-                            
-                            // Let FractalMarkerManager handle the actual chart update
-                            if (fractalManager) {
-                                fractalManager.updateChart();
-                            }
+                        // 7. Update signal markers through unified manager (no race conditions)
+                        if (shouldUpdateMarkers && window.unifiedMarkerManager) {
+                            // Remove old signal markers and add new ones through unified manager
+                            window.unifiedMarkerManager.removeMarkersByPattern('signal_');
+                            window.unifiedMarkerManager.removeMarkersByPattern('enhanced_signal_');
+
+                            // Add new signal markers
+                            finalMarkers.forEach((marker, index) => {
+                                const signalType = marker.size === 4 ? 'enhanced_signal' : 'signal';
+                                const id = `${signalType}_${marker.time}_${index}`;
+                                window.unifiedMarkerManager.setMarker(id, marker);
+                            });
+
+                            // Silenced: console.log(`🎯 Batched: Updated ${finalMarkers.length} signal markers through unified manager`);
                         }
                         
                         // 7. Update debug panel once
@@ -2211,10 +2290,10 @@ async def get_research_dashboard():
                                     element.textContent = value;
                                 }
                             });
-                            console.log(`📊 Batched: Debug panel updated`);
+                            // Silenced: console.log(`📊 Batched: Debug panel updated`);
                         }
                         
-                        console.log('✅ BATCH UPDATE: Completed - Chart updated with single redraw');
+                        // Silenced: console.log('✅ BATCH UPDATE: Completed - Chart updated with single redraw');
                         
                     } catch (error) {
                         console.error('❌ Error in batch update:', error);
@@ -2248,11 +2327,19 @@ async def get_research_dashboard():
             // Global chart update batcher instance
             let chartUpdateBatcher = null;
             
-            // ✅ BATCHED UPDATE SYSTEM - Handle backtest updates from strategy engine
+            // ✅ SIMPLIFIED UPDATE SYSTEM - Handle backtest updates directly
             function handleBacktestUpdate(data) {
-                if (!data || !chartUpdateBatcher) return;
-                
-                console.log('🎯 BATCHED UPDATE: Received update data, processing...');
+                if (!data || !unifiedMarkerManager) return;
+
+                // Only process if there are actual updates to avoid continuous logging
+                const hasUpdates = data.strategy_results && (
+                    data.strategy_results.new_fractal ||
+                    data.strategy_results.new_swing ||
+                    data.strategy_results.new_signals ||
+                    data.strategy_results.enhanced_signals
+                );
+
+                if (!hasUpdates) return; // Skip if no meaningful updates
                 
                 // NOTE: Don't update currentPosition here as it causes position jumps
                 // currentPosition is managed by replay controls, not backend responses
@@ -2261,55 +2348,64 @@ async def get_research_dashboard():
                 // Prepare debug panel updates
                 let debugUpdates = {};
                 
-                // Process strategy results and batch all updates
+                // Process strategy results with minimal updates
                 if (data.strategy_results) {
                     const results = data.strategy_results;
-                    
-                    // 1. Process new fractals (batch)
+
+                    // 1. Process new fractals directly through unified manager
                     if (results.new_fractal && document.getElementById('showFractals').checked) {
-                        console.log(`🔺 Batching new fractal: ${results.new_fractal.fractal_type} at ${results.new_fractal.timestamp}`);
-                        chartUpdateBatcher.addFractal(results.new_fractal);
-                    }
-                    
-                    // 2. Process new swings (batch)
-                    if (results.new_swing) {
-                        console.log(`📈 Batching new swing: ${results.new_swing.direction} swing`);
-                        
-                        // Handle dominant swing changes
-                        const previousDominantSwing = accumulatedDominantSwing;
-                        const newDominantSwing = results.new_swing.is_dominant ? results.new_swing : null;
-                        
-                        // Clear ABC patterns if dominant swing has changed
-                        if (previousDominantSwing && newDominantSwing && 
-                            previousDominantSwing.start_fractal.timestamp !== newDominantSwing.start_fractal.timestamp) {
-                            console.log('🔄 DOMINANT SWING CHANGED - Clearing old ABC patterns');
-                            if (abcPatternManager) {
-                                abcPatternManager.clearABCPatterns();
-                            }
-                            accumulatedABCPatterns = [];
-                        }
-                        
-                        // Update accumulated state
-                        accumulatedSwings = []; // Clear for clean dominance
-                        accumulatedSwings.push(results.new_swing);
-                        accumulatedDominantSwing = results.new_swing.is_dominant ? results.new_swing : null;
-                        
-                        // Batch swing update
-                        if (document.getElementById('showSwings').checked) {
-                            chartUpdateBatcher.addSwing(results.new_swing);
+                        unifiedMarkerManager.addFractal(results.new_fractal);
+                        // Add to accumulated array for other systems
+                        const exists = accumulatedFractals.some(f =>
+                            f.timestamp === results.new_fractal.timestamp && f.fractal_type === results.new_fractal.fractal_type
+                        );
+                        if (!exists) {
+                            accumulatedFractals.push(results.new_fractal);
                         }
                     }
-                    
-                    // 3. Process ABC patterns (batch)
-                    if (results.abc_patterns) {
-                        const validPatterns = [];
-                        if (Array.isArray(results.abc_patterns)) {
-                            results.abc_patterns.forEach(pattern => {
-                                if (pattern && pattern.wave_a && pattern.wave_b && pattern.wave_c) {
-                                    validPatterns.push(pattern);
-                                } else {
-                                    console.warn('Skipping invalid ABC pattern:', pattern);
-                                }
+
+                    // 2. Process signals directly through unified manager
+                    if (results.new_signals && results.new_signals.length > 0 && document.getElementById('showSignals').checked) {
+                        unifiedMarkerManager.loadSignals(results.new_signals, 'signal');
+                    }
+
+                    // 3. Process enhanced signals directly through unified manager
+                    if (results.enhanced_signals && results.enhanced_signals.length > 0 && document.getElementById('showEnhancedSignals') && document.getElementById('showEnhancedSignals').checked) {
+                        results.enhanced_signals.forEach(signal => {
+                            const enhancedSignalData = {
+                                timestamp: signal.timestamp,
+                                signal_type: signal.signal_type,
+                                text: `${signal.quality || 'N/A'}\\n${signal.pattern_type || 'N/A'}\\n${signal.confluence_score ? signal.confluence_score.toFixed(0) : '0'}%`,
+                                size: 4
+                            };
+                            unifiedMarkerManager.addSignal(enhancedSignalData, 'enhanced_signal');
+                        });
+                    }
+
+                    // Skip complex swing/fibonacci/ABC processing to eliminate continuous updates
+                    return; // Exit early to prevent further processing
+                }
+            }
+
+            function initChart() {
+                try {
+                    console.log('🎯 DEBUG: initChart starting...');
+
+                    // Check if LightweightCharts is available
+                    if (typeof LightweightCharts === 'undefined') {
+                        console.error('❌ TradingView LightweightCharts library not loaded!');
+                        updateStatus('Error: TradingView library not loaded');
+                        return;
+                    }
+
+                    console.log('✅ LightweightCharts library available');
+
+                    const chartContainer = document.getElementById('chartDiv');
+                    if (!chartContainer) {
+                        console.error('❌ Chart container not found!');
+                        updateStatus('Error: Chart container not found');
+                        return;
+                    }
                             });
                         }
                         
@@ -2588,18 +2684,24 @@ async def get_research_dashboard():
                 
                 console.log('Chart initialized successfully!');
                 
-                // ✅ Initialize proper marker management
-                fractalManager = new FractalMarkerManager(candlestickSeries);
+                // ✅ Initialize unified marker management system
+                unifiedMarkerManager = new UnifiedMarkerManager(candlestickSeries);
+                window.unifiedMarkerManager = unifiedMarkerManager; // Make globally accessible
+                console.log('✅ Unified marker manager initialized');
+
+                // Legacy compatibility during transition
+                fractalManager = unifiedMarkerManager; // Point to unified manager for compatibility
+
                 swingLineManager = new SwingLineManager(candlestickSeries);
                 fibonacciManager = new FibonacciLevelManager(candlestickSeries);
                 abcPatternManager = new ABCPatternManager(candlestickSeries);
                 lookbackManager = new LookbackIndicatorManager();
                 supplyDemandManager = new SupplyDemandZoneManager(candlestickSeries);
-                
-                // ✅ Initialize chart update batcher to eliminate flashing
-                chartUpdateBatcher = new ChartUpdateBatcher();
-                window.chartUpdateBatcher = chartUpdateBatcher; // Make globally accessible
-                console.log('✅ Chart update batcher initialized');
+
+                // ✅ Chart update batcher disabled - using UnifiedMarkerManager only
+                chartUpdateBatcher = null; // Disable to prevent conflicts
+                window.chartUpdateBatcher = null;
+                console.log('✅ Chart update batcher disabled - using unified manager only');
                 
                 // Initialize professional tools system
                 selectTool('cursor');
@@ -2636,7 +2738,12 @@ async def get_research_dashboard():
 
                 // Reset panning flag and chart overlays for new data
                 userHasManuallyPanned = false;
-                allMarkers = []; // Clear all fractal/signal markers
+
+                // Clear all markers through unified manager
+                if (unifiedMarkerManager) {
+                    unifiedMarkerManager.clearAll();
+                }
+
                 accumulatedFractals = []; // Clear accumulated fractals for new data
                 accumulatedSwings = []; // Clear accumulated swings for new data
 
@@ -2662,9 +2769,9 @@ async def get_research_dashboard():
                     window.currentPositionLine = null;
                 }
 
-                // Clear any existing markers on the chart
-                if (candlestickSeries) {
-                    candlestickSeries.setMarkers([]);
+                // Clear any existing markers through unified manager
+                if (unifiedMarkerManager) {
+                    unifiedMarkerManager.clearAll();
                 }
 
                 // For backtesting: start at currentPosition (which is set by loadData to user's start date)
@@ -2849,39 +2956,37 @@ async def get_research_dashboard():
                 console.log(`📊 Loaded ${swings.length} swing lines from database`);
             }
             
-            // ✅ SIGNALS: Delegate to batching system (prevents flashing)
+            // ✅ SIGNALS: Use unified manager directly (no batching conflicts)
             function addSignalsToChart(signals) {
-                if (!signals || !window.chartUpdateBatcher) return;
-                
-                console.log(`📊 SIGNALS: Delegating ${signals.length} signals to ChartUpdateBatcher`);
-                
-                // Use batching for signals to prevent flashing
-                window.chartUpdateBatcher.addSignals(signals);
+                if (!signals || !unifiedMarkerManager) return;
+
+                // Use unified manager directly to prevent conflicts
+                unifiedMarkerManager.loadSignals(signals, 'signal');
             }
             
             // Dynamic chart update functions for real-time strategy visualization
             
-            // ✅ NEW PROPER MARKER SYSTEM
+            // ✅ UNIFIED MARKER SYSTEM - No more flashing or race conditions
             function updateAllMarkers() {
                 try {
                     console.log('🔄 Updating all chart markers and lines...');
-                    
-                    // Safety check for managers
-                    if (!fractalManager || !swingLineManager || !fibonacciManager || !abcPatternManager) {
-                        console.warn('Marker managers not initialized yet');
+
+                    // Safety check for unified manager
+                    if (!unifiedMarkerManager) {
+                        console.warn('Unified marker manager not initialized yet');
                         return;
                     }
-                    
+
                     // Handle fractals
                     const showFractals = document.getElementById('showFractals').checked;
                     console.log(`🔄 Processing fractals: checkbox=${showFractals}, accumulated=${accumulatedFractals.length}`);
                     if (!showFractals) {
-                        fractalManager.clearFractals();
+                        unifiedMarkerManager.removeMarkersByPattern('fractal_');
                         console.log('Fractals hidden by checkbox');
                     } else {
-                        // Load all accumulated fractals using proper marker management
+                        // Load all accumulated fractals using unified manager
                         if (accumulatedFractals.length > 0) {
-                            fractalManager.loadAllFractals(accumulatedFractals);
+                            unifiedMarkerManager.loadFractals(accumulatedFractals);
                             console.log(`📍 Showing ${accumulatedFractals.length} fractals`);
                         } else {
                             console.log('No fractals accumulated yet');
@@ -3485,47 +3590,32 @@ async def get_research_dashboard():
             }
 
             function loadAllFractalsToChart(fractals) {
-                if (!fractals || !candlestickSeries) return;
-                
-                // Clear existing fractal markers
-                allMarkers = allMarkers.filter(m => !m.shape || (m.shape !== 'arrowDown' && m.shape !== 'arrowUp'));
-                
-                // Add all accumulated fractals
-                fractals.forEach(fractal => {
-                    const fractalTime = Math.floor(new Date(fractal.timestamp).getTime() / 1000);
-                    
-                    const marker = {
-                        time: fractalTime,
-                        position: fractal.type === 'high' ? 'aboveBar' : 'belowBar',
-                        color: fractal.type === 'high' ? '#FF0000' : '#0000FF',
-                        shape: fractal.type === 'high' ? 'arrowDown' : 'arrowUp',
-                        text: '', // Clean display
-                        size: 2
-                    };
-                    
-                    allMarkers.push(marker);
-                });
-                
-                // Sort markers by time
-                allMarkers.sort((a, b) => a.time - b.time);
-                
-                console.log(`Loaded ${fractals.length} accumulated fractals to chart`);
+                if (!fractals || !unifiedMarkerManager) return;
+
+                // Use unified manager to load fractals (no race conditions)
+                const fractalData = fractals.map(fractal => ({
+                    timestamp: fractal.timestamp,
+                    fractal_type: fractal.type
+                }));
+
+                unifiedMarkerManager.loadFractals(fractalData);
+                console.log(`Loaded ${fractals.length} accumulated fractals through unified manager`);
             }
 
-            // ✅ RESTORED - Direct fractal processing for continuous visibility
+            // ✅ UNIFIED - Direct fractal processing for continuous visibility
             function addNewFractalToChart(fractal) {
-                if (!fractal || !fractalManager) return;
-                
+                if (!fractal || !unifiedMarkerManager) return;
+
                 // Add to accumulated fractals array
-                const exists = accumulatedFractals.some(f => 
+                const exists = accumulatedFractals.some(f =>
                     f.timestamp === fractal.timestamp && f.fractal_type === fractal.fractal_type
                 );
-                
+
                 if (!exists) {
                     accumulatedFractals.push(fractal);
                     window.accumulatedFractals.push(fractal); // Sync with global reference
-                    fractalManager.addFractal(fractal); // This calls updateChart() immediately
-                    console.log(`🔺 DIRECT: New ${fractal.fractal_type} fractal added to chart at ${fractal.timestamp} (bar ${fractal.bar_index})`);
+                    unifiedMarkerManager.addFractal(fractal); // No race conditions
+                    console.log(`🔺 UNIFIED: New ${fractal.fractal_type} fractal added to chart at ${fractal.timestamp} (bar ${fractal.bar_index})`);
                     console.log(`🔺 ACCUMULATED: Total fractals now: ${accumulatedFractals.length}`);
                 } else {
                     console.log(`⚠️ DUPLICATE: Fractal at ${fractal.timestamp} already exists, skipping`);
@@ -3675,136 +3765,70 @@ async def get_research_dashboard():
             }
             
             function addNewSignalsToChart(signals) {
-                if (!signals || !candlestickSeries) return;
-                
-                signals.forEach(signal => {
-                    const marker = {
-                        time: Math.floor(new Date(signal.timestamp).getTime() / 1000),
-                        position: signal.signal_type === 'buy' ? 'belowBar' : 'aboveBar',
-                        color: signal.signal_type === 'buy' ? '#26a69a' : '#ef5350',
-                        shape: signal.signal_type === 'buy' ? 'arrowUp' : 'arrowDown',
-                        text: '', // No text for clean display
-                        size: 2
-                    };
-                    
-                    // Check if marker already exists at this timestamp
-                    const existingIndex = allMarkers.findIndex(m => m.time === marker.time);
-                    if (existingIndex === -1) {
-                        allMarkers.push(marker);
-                    }
-                });
-                
-                // Sort markers by time to ensure proper display
-                allMarkers.sort((a, b) => a.time - b.time);
-                
-                candlestickSeries.setMarkers(allMarkers);
-                
-                console.log(`Added ${signals.length} trading signals`);
+                if (!signals || !unifiedMarkerManager) return;
+
+                // Use unified manager to add signals (no race conditions)
+                unifiedMarkerManager.loadSignals(signals, 'signal');
+                console.log(`Added ${signals.length} trading signals through unified manager`);
             }
             
             // Enhanced signals visualization with pattern confirmation details
             function addEnhancedSignalsToChart(enhancedSignals) {
-                if (!enhancedSignals || !Array.isArray(enhancedSignals) || !candlestickSeries) {
-                    console.warn('Invalid enhanced signals data or chart not ready:', {
+                if (!enhancedSignals || !Array.isArray(enhancedSignals) || !unifiedMarkerManager) {
+                    console.warn('Invalid enhanced signals data or unified manager not ready:', {
                         hasSignals: !!enhancedSignals,
                         isArray: Array.isArray(enhancedSignals),
-                        hasChart: !!candlestickSeries
+                        hasManager: !!unifiedMarkerManager
                     });
                     return;
                 }
-                
-                // 🚨 ANTI-FLASHING: Only process truly new signals
-                const newSignals = [];
-                enhancedSignals.forEach(signal => {
-                    try {
-                        if (!signal || !signal.timestamp || !signal.price) {
-                            console.warn('Invalid signal object:', signal);
-                            return;
-                        }
-                        
-                        // Create unique identifier for signal
-                        const signalId = `${signal.timestamp}_${signal.price}_${signal.signal_type}`;
-                        
-                        // Check if this exact signal already exists
-                        const existingSignal = enhancedSignalsData.find(existing => 
-                            existing.timestamp === signal.timestamp && 
-                            existing.price === signal.price &&
-                            existing.signal_type === signal.signal_type
-                        );
-                        
-                        if (!existingSignal) {
-                            newSignals.push(signal);
-                        }
-                    } catch (error) {
-                        console.error('Error checking signal:', error, signal);
-                    }
+
+                // Filter for truly new signals
+                const newSignals = enhancedSignals.filter(signal => {
+                    if (!signal || !signal.timestamp || !signal.price) return false;
+
+                    return !enhancedSignalsData.find(existing =>
+                        existing.timestamp === signal.timestamp &&
+                        existing.price === signal.price &&
+                        existing.signal_type === signal.signal_type
+                    );
                 });
-                
-                // Only process if we have genuinely new signals
+
                 if (newSignals.length === 0) {
                     console.log('No new enhanced signals - keeping existing display');
                     return;
                 }
-                
+
                 console.log(`Processing ${newSignals.length} NEW enhanced signals`);
-                
-                // 🚨 ANTI-FLASHING: Process only new signals
-                let shouldUpdateMarkers = false;
-                
+
+                // Process new signals through unified manager
                 newSignals.forEach(signal => {
                     try {
-                        if (!signal || !signal.timestamp || !signal.price) {
-                            console.warn('Skipping invalid signal:', signal);
-                            return;
-                        }
-                        
-                        const signalTime = Math.floor(new Date(signal.timestamp).getTime() / 1000);
-                    
-                        // Create enhanced signal marker with distinctive styling
-                        const marker = {
-                            time: signalTime,
-                            position: signal.signal_type === 'buy' ? 'belowBar' : 'aboveBar',
-                            color: signal.signal_type === 'buy' ? '#00ff88' : '#ff4444', // Distinctive bright colors
-                            shape: signal.signal_type === 'buy' ? 'arrowUp' : 'arrowDown',
-                            text: `${signal.quality || 'N/A'}\\n${signal.pattern_type || 'N/A'}\\n${signal.confluence_score ? signal.confluence_score.toFixed(0) : '0'}%`, // Show quality and pattern
-                            size: 4 // Larger size to distinguish from regular signals
+                        if (!signal || !signal.timestamp || !signal.price) return;
+
+                        // Add enhanced signal through unified manager
+                        const enhancedSignalData = {
+                            timestamp: signal.timestamp,
+                            signal_type: signal.signal_type,
+                            text: `${signal.quality || 'N/A'}\\n${signal.pattern_type || 'N/A'}\\n${signal.confluence_score ? signal.confluence_score.toFixed(0) : '0'}%`,
+                            size: 4
                         };
-                        
-                        // Check if marker already exists at this exact timestamp and type
-                        const existingIndex = allMarkers.findIndex(m => 
-                            m.time === marker.time && 
-                            m.position === marker.position && 
-                            m.shape === marker.shape
-                        );
-                        
-                        if (existingIndex === -1) {
-                            allMarkers.push(marker);
-                            shouldUpdateMarkers = true;
-                            console.log(`Added new enhanced signal marker at ${signal.timestamp}`);
-                        }
-                        
-                        // Add horizontal lines for entry, stop loss, and take profit (but prevent duplicates)
+
+                        unifiedMarkerManager.addSignal(enhancedSignalData, 'enhanced_signal');
+
+                        // Add horizontal lines for entry, stop loss, and take profit
+                        const signalTime = Math.floor(new Date(signal.timestamp).getTime() / 1000);
                         addSignalLevelsToChart(signal, signalTime);
-                        
+
                         // Add to panel for new signals only
                         addSignalToPanel(signal);
-                        
+
                     } catch (error) {
                         console.error('Error processing individual signal:', error, signal);
                     }
                 });
-                
-                // 🚨 ANTI-FLASHING: Only update markers if we actually added new ones
-                if (shouldUpdateMarkers) {
-                    // Sort markers by time to ensure proper display
-                    allMarkers.sort((a, b) => a.time - b.time);
-                    candlestickSeries.setMarkers(allMarkers);
-                    console.log(`Updated chart with ${allMarkers.length} total markers`);
-                } else {
-                    console.log('No marker updates needed - preventing chart redraw');
-                }
-                
-                console.log(`Added ${enhancedSignals.length} enhanced trading signals with pattern confirmation`);
+
+                console.log(`Added ${newSignals.length} enhanced trading signals through unified manager`);
             }
             
             // Add horizontal lines for signal levels (entry, stop, take profit)
@@ -3952,16 +3976,13 @@ async def get_research_dashboard():
                 enhancedSignalsData = [];
                 clearEnhancedSignalLines();
                 updateEnhancedSignalsPanel();
-                
-                // Remove enhanced signal markers from chart
-                allMarkers = allMarkers.filter(marker => 
-                    !(marker.color === '#00ff88' || marker.color === '#ff4444')
-                );
-                if (candlestickSeries) {
-                    candlestickSeries.setMarkers(allMarkers);
+
+                // Remove enhanced signal markers through unified manager
+                if (unifiedMarkerManager) {
+                    unifiedMarkerManager.removeMarkersByPattern('enhanced_signal_');
                 }
-                
-                console.log('Cleared all enhanced signals');
+
+                console.log('Cleared all enhanced signals through unified manager');
             }
             
             // Export enhanced signals to CSV
@@ -4307,6 +4328,9 @@ async def get_research_dashboard():
                             const backtestSuccess = await loadBacktestingEngine(symbol, timeframe, startDate, endDate);
                             if (backtestSuccess) {
                                 console.log('✅ Backtesting engine loaded successfully!');
+                                // Initialize last known parameter values to prevent refresh loops
+                                lastFractalPeriods = parseInt(document.getElementById('fractalPeriods').value) || 5;
+                                lastLookbackCandles = parseInt(document.getElementById('lookbackCandles').value) || 140;
                             } else {
                                 console.log('❌ Backtesting engine failed to load');
                             }
@@ -4328,10 +4352,12 @@ async def get_research_dashboard():
                         
                         // Update chart with new data (will show only up to current position)
                         updateChart(marketData);
-                        
-                        // Clear all markers when loading new data
-                        allMarkers = [];
-                        
+
+                        // Clear all markers when loading new data through unified manager
+                        if (unifiedMarkerManager) {
+                            unifiedMarkerManager.clearAll();
+                        }
+
                         console.log('✅ Chart updated with market data, backtesting engine loaded successfully');
                         
                         // Synchronize backend to the correct start position
@@ -4400,6 +4426,10 @@ async def get_research_dashboard():
                 }
             }
             
+            // Track last fractal periods to prevent unnecessary reloads
+            let lastFractalPeriods = null;
+            let lastLookbackCandles = null;
+            
             // Refresh chart elements based on settings checkboxes
             function refreshChartElements() {
                 console.log('🔄 Refreshing chart elements based on settings...');
@@ -4419,20 +4449,29 @@ async def get_research_dashboard():
                     return;
                 }
                 
-                // Check if fractal periods changed - if so, need to reload backend data
+                // Check if fractal periods or lookback changed - if so, need to reload backend data
                 const currentFractalPeriods = parseInt(document.getElementById('fractalPeriods').value) || 5;
+                const currentLookbackCandles = parseInt(document.getElementById('lookbackCandles').value) || 140;
                 const symbolSelect = document.getElementById('symbolSelect');
                 const timeframeSelect = document.getElementById('timeframeSelect');
                 const startDate = document.getElementById('startDate').value;
                 const endDate = document.getElementById('endDate').value;
                 
-                if (symbolSelect && symbolSelect.value && startDate && endDate) {
-                    console.log(`🔄 Fractal periods changed to ${currentFractalPeriods}, reloading backend data...`);
+                // Only reload if parameters actually changed and data is loaded
+                const fractalPeriodsChanged = lastFractalPeriods !== null && lastFractalPeriods !== currentFractalPeriods;
+                const lookbackCandlesChanged = lastLookbackCandles !== null && lastLookbackCandles !== currentLookbackCandles;
+                
+                if ((fractalPeriodsChanged || lookbackCandlesChanged) && symbolSelect && symbolSelect.value && startDate && endDate) {
+                    console.log(`🔄 Parameters changed - Fractal: ${lastFractalPeriods} → ${currentFractalPeriods}, Lookback: ${lastLookbackCandles} → ${currentLookbackCandles}`);
                     
-                    // Reload backend with new fractal periods (non-blocking)
+                    // Update stored values
+                    lastFractalPeriods = currentFractalPeriods;
+                    lastLookbackCandles = currentLookbackCandles;
+                    
+                    // Reload backend with new parameters (non-blocking)
                     loadBacktestingEngine(symbolSelect.value, timeframeSelect.value, startDate, endDate)
                         .then(() => {
-                            console.log('✅ Backend reloaded with new fractal periods');
+                            console.log('✅ Backend reloaded with new parameters');
                             // Update display after backend reload directly
                             updateAllMarkers();
                         })
@@ -4442,7 +4481,13 @@ async def get_research_dashboard():
                             updateAllMarkers();
                         });
                 } else {
-                    // No data loaded yet, just update display
+                    // Just update display without backend reload
+                    if (lastFractalPeriods === null) {
+                        lastFractalPeriods = currentFractalPeriods;
+                    }
+                    if (lastLookbackCandles === null) {
+                        lastLookbackCandles = currentLookbackCandles;
+                    }
                     updateAllMarkers();
                 }
                 
@@ -4464,40 +4509,27 @@ async def get_research_dashboard():
                     console.log('🔄 Updated S&D zone rectangles');
                 }
                 
-                // Handle enhanced signals visibility (prevent flashing)
+                // Handle enhanced signals visibility through unified manager
                 const showEnhancedSignals = document.getElementById('showEnhancedSignals') ? document.getElementById('showEnhancedSignals').checked : false;
                 if (!showEnhancedSignals) {
                     // Hide enhanced signals but keep data
                     clearEnhancedSignalLines();
-                    allMarkers = allMarkers.filter(marker => 
-                        !(marker.color === '#00ff88' || marker.color === '#ff4444')
-                    );
-                    if (candlestickSeries) {
-                        candlestickSeries.setMarkers(allMarkers);
+                    if (unifiedMarkerManager) {
+                        unifiedMarkerManager.removeMarkersByPattern('enhanced_signal_');
                     }
-                    console.log('🔄 Hidden enhanced signals');
-                } else if (enhancedSignalsData.length > 0) {
-                    // Re-show enhanced signals from cache without flashing
-                    console.log('🔄 Re-showing enhanced signals from cache');
+                    console.log('🔄 Hidden enhanced signals through unified manager');
+                } else if (enhancedSignalsData.length > 0 && unifiedMarkerManager) {
+                    // Re-show enhanced signals from cache through unified manager
+                    console.log('🔄 Re-showing enhanced signals from cache through unified manager');
                     enhancedSignalsData.forEach(signal => {
-                        const signalTime = Math.floor(new Date(signal.timestamp).getTime() / 1000);
-                        const marker = {
-                            time: signalTime,
-                            position: signal.signal_type === 'buy' ? 'belowBar' : 'aboveBar',
-                            color: signal.signal_type === 'buy' ? '#00ff88' : '#ff4444',
-                            shape: signal.signal_type === 'buy' ? 'arrowUp' : 'arrowDown',
+                        const enhancedSignalData = {
+                            timestamp: signal.timestamp,
+                            signal_type: signal.signal_type,
                             text: `${signal.quality}\\n${signal.pattern_type}\\n${signal.confluence_score.toFixed(0)}%`,
                             size: 4
                         };
-                        const existingIndex = allMarkers.findIndex(m => m.time === marker.time && m.color === marker.color);
-                        if (existingIndex === -1) {
-                            allMarkers.push(marker);
-                        }
+                        unifiedMarkerManager.addSignal(enhancedSignalData, 'enhanced_signal');
                     });
-                    allMarkers.sort((a, b) => a.time - b.time);
-                    if (candlestickSeries) {
-                        candlestickSeries.setMarkers(allMarkers);
-                    }
                 }
 
                 console.log('✅ Chart elements refresh initiated');
@@ -4807,39 +4839,35 @@ async def get_research_dashboard():
                     if (fractalsResult.success && fractalsResult.fractals) {
                         console.log(`📍 Loaded ${fractalsResult.fractals.length} fractals from database`);
 
-                        // Clear existing markers first to avoid duplication
-                        allMarkers = [];
-                        
+                        // Clear existing markers through unified manager
+                        if (unifiedMarkerManager) {
+                            unifiedMarkerManager.clearAll();
+                        }
+
                         // Only clear enhanced signals if loading completely new data
-                        // (not just navigating through existing data)
                         const isNewDataLoad = true; // This happens only on fresh data load
                         if (isNewDataLoad) {
                             console.log('🔄 Loading new data - clearing enhanced signals');
                             clearAllEnhancedSignals();
                         }
-                        
+
                         // Add fractals to chart if checkbox is checked
-                        if (fractalsResult.fractals.length > 0 && document.getElementById('showFractals').checked) {
+                        if (fractalsResult.fractals.length > 0 && document.getElementById('showFractals').checked && unifiedMarkerManager) {
                             console.log('📍 Processing fractals for chart display...');
 
-                            fractalsResult.fractals.forEach(fractal => {
-                                const marker = {
-                                    time: Math.floor(new Date(fractal.timestamp).getTime() / 1000),
-                                    position: fractal.type === 'high' ? 'aboveBar' : 'belowBar',
-                                    color: fractal.type === 'high' ? '#ff4444' : '#00bcd4', // Brighter colors
-                                    shape: fractal.type === 'high' ? 'arrowDown' : 'arrowUp',
-                                    text: '', // No text for clean look
-                                    size: 2 // Increase size for visibility
-                                };
-                                allMarkers.push(marker);
-                            });
+                            // Convert database fractals to proper format
+                            const fractalData = fractalsResult.fractals.map(fractal => ({
+                                timestamp: fractal.timestamp,
+                                fractal_type: fractal.type
+                            }));
 
-                            console.log(`📍 Created ${allMarkers.length} fractal markers, setting on chart...`);
-                            candlestickSeries.setMarkers(allMarkers);
+                            unifiedMarkerManager.loadFractals(fractalData);
+                            console.log(`📍 Loaded ${fractalData.length} fractal markers through unified manager`);
                         } else {
                             console.log('📍 No fractals to display:', {
                                 fractalCount: fractalsResult.fractals?.length || 0,
-                                checkboxChecked: document.getElementById('showFractals').checked
+                                checkboxChecked: document.getElementById('showFractals').checked,
+                                hasManager: !!unifiedMarkerManager
                             });
                         }
                     } else {
