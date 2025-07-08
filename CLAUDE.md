@@ -46,16 +46,48 @@
 
 ### Development Workflow Requirements
 
+#### 🚨 MANDATORY CODE QUALITY STANDARDS - ENTERPRISE LEVEL REQUIRED 🚨
+
+**🔒 ZERO TOLERANCE POLICY:**
+- **NO duplicate functions, methods, or classes** - Each function defined ONCE only
+- **NO unused/dead code** - Remove immediately upon detection
+- **NO incomplete implementations** - Complete every function before committing
+- **NO duplicate imports** - Organize imports at file top, deduplicate rigorously
+- **NO copy-paste programming** - Reuse existing functions, don't duplicate
+- **NO debug code in production** - Remove console.log, print statements before commit
+
+**✅ PRE-COMMIT CHECKLIST - MANDATORY:**
+1. **Scan entire file for duplicate function names** - Use search tools
+2. **Check for unused variables/functions** - Remove immediately  
+3. **Validate all imports** - No duplicates, proper organization
+4. **Test all modified functions** - Ensure they work before commit
+5. **Remove debug statements** - Clean professional code only
+6. **Verify syntax** - No compilation errors allowed
+
+**🛠️ CODE REVIEW REQUIREMENTS:**
+- **Every change** must be reviewed for duplicates before implementation
+- **Every function** must have single purpose and clear implementation
+- **Every import** must be necessary and properly organized
+- **Every line** of code must serve a purpose
+
+**❌ IMMEDIATE REJECTION CRITERIA:**
+- Duplicate function definitions in same file
+- Unused imports or dead code
+- Incomplete or broken function implementations  
+- Debug code left in production files
+- Copy-paste code without proper refactoring
+
 #### Git Commit Strategy
 - **Work on development branch** for all ongoing development
 - **Commit frequently** as we progress through development phases
 - Use **conventional commit format**: `type(scope): description`
+- **MANDATORY**: Include "code quality verified" in commit messages
 - Commit after completing each major task or feature
 - Examples:
-  - `feat(core): implement fractal detection algorithm`
-  - `docs(phase1): update data pipeline specifications`
-  - `test(fibonacci): add unit tests for retracement calculations`
-  - `fix(mt5): resolve connection timeout issues`
+  - `feat(core): implement fractal detection algorithm - code quality verified`
+  - `docs(phase1): update data pipeline specifications - no duplicates`
+  - `test(fibonacci): add unit tests for retracement calculations - clean code`
+  - `fix(mt5): resolve connection timeout issues - duplicates removed`
 
 #### Documentation Updates - CRITICAL REQUIREMENT ⚠️
 - **MANDATORY**: Update documentation simultaneously with ALL code changes
@@ -84,12 +116,14 @@
 - Individual docs in `/docs` - Update as features are implemented
 
 #### Development Principles
-1. **Document first, then implement**
-2. **Test-driven development**
-3. **Commit early and often**
-4. **CRITICAL: Keep documentation in sync with code - NO EXCEPTIONS**
-5. **Follow the phase-by-phase plan**
-6. **Documentation completeness is part of task completion**
+1. **🔒 ENTERPRISE CODE QUALITY FIRST** - Zero tolerance for duplicates or dead code
+2. **Document first, then implement** - Plan before coding
+3. **Test-driven development** - Verify before committing
+4. **Commit early and often** - Small, clean commits
+5. **CRITICAL: Keep documentation in sync with code - NO EXCEPTIONS**
+6. **Follow the phase-by-phase plan** - Systematic development
+7. **Documentation completeness is part of task completion**
+8. **🚨 MANDATORY: Code quality verification before any commit**
 
 ### Current Project Status
 - **Phase**: Phase 3 - Visual Backtesting & Research System (IN PROGRESS)
