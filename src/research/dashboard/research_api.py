@@ -465,6 +465,7 @@ async def get_research_dashboard():
                 </div>
                 <button onclick="loadData()">Load Data</button>
                 <button onclick="runBacktest()">Run Backtest</button>
+                <button onclick="emergencyStopAllUpdates()" style="background-color: #ff4444; border-color: #ff4444; color: white;" title="Stop all automatic updates and chart flashing">🛑 Stop</button>
             </div>
         </div>
         
@@ -868,6 +869,76 @@ async def get_research_dashboard():
         
         <!-- TradingView Lightweight Charts Library - Multiple CDNs for reliability -->
         <script>
+            // 🔧 Global debug logging control - centralized logging management
+            const DEBUG_LOGGING = {
+                markers: false,
+                swings: false,
+                fractals: false,
+                navigation: false,
+                websocket: true,
+                errors: true,
+                performance: false,
+                swing_details: false,  // Disable detailed swing logging
+                chart_updates: false   // Disable chart update logging
+            };
+            
+            // Centralized debug logging function
+            function debugLog(category, message, data = null) {
+                if (DEBUG_LOGGING[category] || category === 'errors') {
+                    if (data) {
+                        console.log(message, data);
+                    } else {
+                        console.log(message);
+                    }
+                }
+            }
+            
+            // ✅ ESSENTIAL FUNCTIONS - Define these first to avoid reference errors
+            function updateStatus(message) {
+                const statusBar = document.getElementById('statusBar');
+                if (statusBar) {
+                    statusBar.textContent = message;
+                }
+            }
+            
+            function initializeApp() {
+                console.log('✅ Initializing application...');
+                try {
+                    // Delay initChart to ensure it's defined (function hoisting issue)
+                    setTimeout(() => {
+                        try {
+                            initChart();
+                            console.log('✅ Chart initialized successfully');
+                        } catch (chartError) {
+                            console.error('❌ Error initializing chart:', chartError);
+                            updateStatus('Error: Chart initialization failed');
+                        }
+                    }, 10);
+                    
+                    // Initialize lookback indicator manager
+                    lookbackManager = new LookbackIndicatorManager();
+                    console.log('✅ Lookback indicator manager initialized');
+                    
+                    initWebSocket();
+                    console.log('✅ WebSocket initialized');
+                    
+                    loadAvailableSymbols();
+                    console.log('✅ Loading symbols...');
+                    
+                    loadAvailableDateRanges();
+                    console.log('✅ Loading date ranges...');
+                    
+                    // Show welcome message on initial load
+                    showWelcomeMessage();
+                    console.log('✅ Welcome message shown');
+                    
+                    // Status will be updated by loadAvailableDateRanges()
+                } catch (error) {
+                    console.error('❌ Error during app initialization:', error);
+                    updateStatus('Error: Failed to initialize dashboard');
+                }
+            }
+            
             // Try multiple CDNs for TradingView charts
             function loadTradingViewCharts() {
                 const cdnUrls = [
@@ -1050,7 +1121,7 @@ async def get_research_dashboard():
                     }
                     if (removed > 0) {
                         this.scheduleUpdate();
-                        console.log(`🗑️ Removed ${removed} markers matching pattern: ${pattern}`);
+                        debugLog('markers', `🗑️ Removed ${removed} markers matching pattern: ${pattern}`);
                     }
                 }
 
@@ -1088,19 +1159,34 @@ async def get_research_dashboard():
 
                 // Perform the actual chart update
                 performUpdate() {
-                    if (!this.series) return;
+                    // 🚨 CRITICAL FIX: Always use the current candlestickSeries, not stored reference
+                    const currentSeries = window.candlestickSeries || this.series;
+                    if (!currentSeries) {
+                        console.error('❌ No valid series reference for markers!');
+                        return;
+                    }
 
                     // Convert Map to array and sort by time
                     const markersArray = Array.from(this.markers.values());
                     markersArray.sort((a, b) => a.time - b.time);
 
                     // Single setMarkers call - no flashing
-                    this.series.setMarkers(markersArray);
-
-                    // SILENT MODE: Only log errors, not routine updates to eliminate console spam
-                    // if (markersArray.length > 0) {
-                    //     console.log(`📍 UnifiedMarkerManager: Updated chart with ${markersArray.length} markers`);
-                    // }
+                    console.log(`🔍 CRITICAL: About to call setMarkers with ${markersArray.length} markers`);
+                    console.log(`🔍 Using series:`, currentSeries === this.series ? 'stored reference' : 'GLOBAL candlestickSeries');
+                    if (markersArray.length > 0) {
+                        console.log(`🔍 First marker:`, markersArray[0]);
+                    }
+                    
+                    currentSeries.setMarkers(markersArray);
+                    
+                    console.log(`🔍 CRITICAL: setMarkers completed - markers should be visible now`);
+                    
+                    // Immediate verification - no delayed timeouts that might interfere
+                    console.log(`🔍 IMMEDIATE VERIFY: Series valid=${!!currentSeries}, Manager has ${this.getMarkerCount()} markers`);
+                    
+                    // Store reference to successful marker application
+                    this.lastSuccessfulMarkerCount = markersArray.length;
+                    
                     this.updateTimeout = null;
                 }
 
@@ -1138,15 +1224,20 @@ async def get_research_dashboard():
                 }
 
                 loadFractals(fractals) {
-                    if (!Array.isArray(fractals)) return;
+                    if (!Array.isArray(fractals)) {
+                        console.log(`🚨 loadFractals called with non-array: ${typeof fractals}`);
+                        return;
+                    }
 
+                    console.log(`🔍 loadFractals: Removing existing fractals, then loading ${fractals.length} new fractals`);
+                    
                     // Remove existing fractals first
                     this.removeMarkersByPattern('fractal_');
 
                     // Add all fractals
                     fractals.forEach(fractal => this.addFractal(fractal));
 
-                    // Silenced: console.log(`📍 Loaded ${fractals.length} fractals into unified manager`);
+                    console.log(`🔍 loadFractals: After processing, unified manager has ${this.getMarkerCount()} total markers`);
                 }
 
                 loadSignals(signals, signalType = 'signal') {
@@ -1164,6 +1255,23 @@ async def get_research_dashboard():
 
             // Global unified marker manager instance
             let unifiedMarkerManager = null;
+            
+            // 🚨 CRITICAL: Ensure markers persist across all chart operations
+            function restoreAllMarkersAfterChartUpdate() {
+                if (!unifiedMarkerManager) return;
+                
+                // Restore fractals if checkbox is checked (check both global and local arrays)
+                const fractalSource = (accumulatedFractals.length > 0) ? accumulatedFractals : window.accumulatedFractals;
+                if (document.getElementById('showFractals').checked && fractalSource && fractalSource.length > 0) {
+                    unifiedMarkerManager.loadFractals(fractalSource);
+                    debugLog('markers', `🔄 Restored ${fractalSource.length} fractals after chart update`);
+                } else {
+                    debugLog('markers', '🔄 No fractals to restore - either checkbox unchecked or no accumulated data');
+                }
+                
+                // Force immediate update to ensure markers show
+                unifiedMarkerManager.forceUpdate();
+            }
 
             // Legacy compatibility - keep for backward compatibility during transition
             let fractalManager = null;
@@ -1341,7 +1449,7 @@ async def get_research_dashboard():
                     const id = this._nextId++;
                     
                     // 🚨 CRITICAL: Final coordinate validation before drawing
-                    console.log(`🎯 ADDING SWING LINE ${id}:`, { point1, point2, direction, strength });
+                    // SILENCED: console.log(`🎯 ADDING SWING LINE ${id}:`, { point1, point2, direction, strength });
                     
                     // Validate coordinates one more time
                     if (!point1 || !point2) {
@@ -1390,17 +1498,17 @@ async def get_research_dashboard():
                             { time: point2.time, value: point2.value }
                         ];
                         
-                        // Log the exact data being sent to TradingView
-                        console.log(`🎯 TRADINGVIEW DATA for swing ${id}:`, {
-                            swingData,
-                            config: {
-                                color,
-                                lineWidth,
-                                lineStyle,
-                                direction,
-                                strength
-                            }
-                        });
+                        // SILENCED: TradingView data logging
+                        // console.log(`🎯 TRADINGVIEW DATA for swing ${id}:`, {
+                        //     swingData,
+                        //     config: {
+                        //         color,
+                        //         lineWidth,
+                        //         lineStyle,
+                        //         direction,
+                        //         strength
+                        //     }
+                        // });
                         
                         // Validate TradingView data format
                         swingData.forEach((point, idx) => {
@@ -1424,10 +1532,10 @@ async def get_research_dashboard():
                         lineSeries.setData(swingData);
                         this._simpleLines.set(id, lineSeries);
                         
-                        console.log(`✅ SUCCESS: Added ${direction} swing line ${id} from time ${point1.time} (${point1.value}) to time ${point2.time} (${point2.value})`);
+                        // SILENCED: console.log(`✅ SUCCESS: Added ${direction} swing line ${id} from time ${point1.time} (${point1.value}) to time ${point2.time} (${point2.value})`);
                         return id;
                     } catch (error) {
-                        console.error(`❌ CRITICAL ERROR adding swing line ${id}:`, error, { point1, point2, direction, strength });
+                        // Keep critical errors: console.error(`❌ CRITICAL ERROR adding swing line ${id}:`, error, { point1, point2, direction, strength });
                         return null;
                     }
                 }
@@ -1448,7 +1556,7 @@ async def get_research_dashboard():
                 }
                 
                 removeAllSwingLines() {
-                    console.log(`🧹 Removing ${this._simpleLines.size} swing lines`);
+                    debugLog('swing_details', `🧹 Removing ${this._simpleLines.size} swing lines`);
                     this._simpleLines.forEach(lineSeries => {
                         chart.removeSeries(lineSeries);
                     });
@@ -1457,11 +1565,11 @@ async def get_research_dashboard():
                 }
                 
                 loadAllSwings(swings) {
-                    console.log(`🔍 DEBUG: Loading ${swings.length} swings for filtering`, swings);
+                    debugLog('swing_details', `🔍 DEBUG: Loading ${swings.length} swings for filtering`, swings);
                     
                     // 🎯 CRITICAL: Only show the LATEST 2 swings (1 up + 1 down) within lookback period
                     if (!swings || swings.length === 0) {
-                        console.log('No swings to display');
+                        debugLog('swing_details', 'No swings to display');
                         this.removeAllSwingLines(); // Only clear if no swings
                         return;
                     }
@@ -1469,7 +1577,7 @@ async def get_research_dashboard():
                     // 🚨 PERFORMANCE FIX: Check if swing data has actually changed before clearing/redrawing
                     const currentSwingSignature = swings.map(s => `${s.direction}-${s.start_fractal.timestamp}-${s.end_fractal.timestamp}-${s.is_dominant}`).join('|');
                     if (this._lastSwingSignature === currentSwingSignature) {
-                        console.log('📊 Swing data unchanged, skipping redraw to prevent flashing');
+                        debugLog('chart_updates', '📊 Swing data unchanged, skipping redraw to prevent flashing');
                         return;
                     }
                     this._lastSwingSignature = currentSwingSignature;
@@ -1488,9 +1596,9 @@ async def get_research_dashboard():
                             return swingPosition >= lookbackStart;
                         });
                         
-                        console.log(`📊 Step 1: Filtered from ${swings.length} to ${filteredSwings.length} swings within lookback period (position ${currentPosition}, lookback ${lookbackCandles})`);
+                        debugLog('swing_details', `📊 Step 1: Filtered from ${swings.length} to ${filteredSwings.length} swings within lookback period (position ${currentPosition}, lookback ${lookbackCandles})`);
                     } else {
-                        console.log('📊 Step 1: No current position, using all swings for filtering');
+                        debugLog('swing_details', '📊 Step 1: No current position, using all swings for filtering');
                     }
                     
                     // 🚨 CRITICAL FIX: Respect backend's dominance calculation completely
@@ -1530,18 +1638,18 @@ async def get_research_dashboard():
                         displaySwings.push(oppositeSwings[0]);
                     }
                     
-                    console.log(`🎯 DISPLAY STRATEGY: Showing ${displaySwings.length} swings (dominant + context)`);
+                    debugLog('swing_details', `🎯 DISPLAY STRATEGY: Showing ${displaySwings.length} swings (dominant + context)`);
                     displaySwings.forEach((swing, i) => {
                         const isDominant = swing.is_dominant || false;
                         const magnitude = Math.abs(swing.points || Math.abs(swing.end_fractal.price - swing.start_fractal.price));
-                        console.log(`   ${i + 1}. ${swing.direction.toUpperCase()} swing: ${magnitude.toFixed(5)} pts (${(magnitude*10000).toFixed(1)} pips) - ${isDominant ? 'DOMINANT' : 'context'}`);
+                        debugLog('swing_details', `   ${i + 1}. ${swing.direction.toUpperCase()} swing: ${magnitude.toFixed(5)} pts (${(magnitude*10000).toFixed(1)} pips) - ${isDominant ? 'DOMINANT' : 'context'}`);
                     });
 
                     // Update market bias based on backend's dominant swing
                     if (dominantSwing) {
                         const magnitude = Math.abs(dominantSwing.points || Math.abs(dominantSwing.end_fractal.price - dominantSwing.start_fractal.price));
                         updateMarketBiasFromDominantSwing(dominantSwing, magnitude);
-                        console.log(`🔒 BACKEND DOMINANCE: ${dominantSwing.direction.toUpperCase()} swing (${magnitude.toFixed(5)} pts / ${(magnitude*10000).toFixed(1)} pips) marked as dominant`);
+                        debugLog('swing_details', `🔒 BACKEND DOMINANCE: ${dominantSwing.direction.toUpperCase()} swing (${magnitude.toFixed(5)} pts / ${(magnitude*10000).toFixed(1)} pips) marked as dominant`);
                     }
                     
                     // Add only the latest swing lines with proper styling
@@ -1549,12 +1657,12 @@ async def get_research_dashboard():
                         this._drawValidatedSwingInternal(swing, index);
                     });
                     
-                    console.log(`📊 Clean display: ${displaySwings.length} swing lines loaded (using backend invalidation-based dominance)`);
+                    debugLog('swing_details', `📊 Clean display: ${displaySwings.length} swing lines loaded (using backend invalidation-based dominance)`);
                 }
 
                 _drawValidatedSwingInternal(swing, index) {
                     // 🚨 CRITICAL: Validate swing data before drawing
-                    console.log(`🔍 VALIDATING SWING ${index + 1}:`, swing);
+                    debugLog('swing_details', `🔍 VALIDATING SWING ${index + 1}:`, swing);
 
                     // Validate fractal data exists
                     if (!swing.start_fractal || !swing.end_fractal) {
@@ -1781,7 +1889,7 @@ async def get_research_dashboard():
                     try {
                         if (!pattern) return;
 
-                        console.log('🌊 Adding ABC pattern:', pattern);
+                        // SILENCED: console.log('🌊 Adding ABC pattern:', pattern);
 
                         // Wave A line
                         this.addWaveLine('A', pattern.wave_a);
@@ -1836,7 +1944,7 @@ async def get_research_dashboard():
                         lineSeries.setData(lineData);
                         this.abcLines.push(lineSeries);
 
-                        console.log(`✅ Added Wave ${waveType} line from ${waveData.start_price} to ${waveData.end_price}`);
+                        // SILENCED: console.log(`✅ Added Wave ${waveType} line from ${waveData.start_price} to ${waveData.end_price}`);
 
                     } catch (error) {
                         console.error(`❌ Error adding wave ${waveType} line:`, error);
@@ -1850,14 +1958,14 @@ async def get_research_dashboard():
                             return;
                         }
 
-                        console.log('🔄 Loading', abcPatterns.length, 'ABC patterns');
+                        // SILENCED: console.log('🔄 Loading', abcPatterns.length, 'ABC patterns');
                         
                         // 🔧 CRUCIAL: Check if dominant swing has changed
                         const currentSwingId = currentDominantSwing ? 
                             `${currentDominantSwing.start_fractal.timestamp}-${currentDominantSwing.end_fractal.timestamp}` : null;
                         
                         if (this.lastDominantSwingId && this.lastDominantSwingId !== currentSwingId) {
-                            console.log('🔄 DOMINANT SWING CHANGED - Clearing old ABC patterns');
+                            // SILENCED: console.log('🔄 DOMINANT SWING CHANGED - Clearing old ABC patterns');
                             this.clearABCPatterns();
                         }
                         
@@ -1955,9 +2063,14 @@ async def get_research_dashboard():
                             size: 0 // Hide the marker shape, just show text
                         };
                         
-                        lineSeries.setMarkers([textMarker]);
+                        // 🚨 CRITICAL: Route through unified marker manager instead of direct setMarkers
+                        if (unifiedMarkerManager) {
+                            unifiedMarkerManager.setMarker(`swing_text_${swing.direction}_${swing.start_fractal.timestamp}`, textMarker);
+                        } else {
+                            lineSeries.setMarkers([textMarker]);
+                        }
                         
-                        console.log(`✅ Added ${label} projection line at ${price} with text label`);
+                        debugLog('swing_details', `✅ Added ${label} projection line at ${price} with text label`);
                         
                     } catch (error) {
                         console.error(`❌ Error adding ${label} projection line:`, error);
@@ -2387,145 +2500,7 @@ async def get_research_dashboard():
                 }
             }
 
-            function initChart() {
-                try {
-                    console.log('🎯 DEBUG: initChart starting...');
-
-                    // Check if LightweightCharts is available
-                    if (typeof LightweightCharts === 'undefined') {
-                        console.error('❌ TradingView LightweightCharts library not loaded!');
-                        updateStatus('Error: TradingView library not loaded');
-                        return;
-                    }
-
-                    console.log('✅ LightweightCharts library available');
-
-                    const chartContainer = document.getElementById('chartDiv');
-                    if (!chartContainer) {
-                        console.error('❌ Chart container not found!');
-                        updateStatus('Error: Chart container not found');
-                        return;
-                    }
-                            });
-                        }
-                        
-                        if (validPatterns.length > 0) {
-                            accumulatedABCPatterns = validPatterns;
-                            if (document.getElementById('showABC') && document.getElementById('showABC').checked) {
-                                console.log(`🌊 Batching ${validPatterns.length} ABC patterns`);
-                                chartUpdateBatcher.addABCPatterns(validPatterns, accumulatedDominantSwing);
-                            }
-                        }
-                    }
-                    
-                    // 4. Process Fibonacci levels (batch)
-                    if (results.fibonacci_levels && results.fibonacci_levels.length > 0 && document.getElementById('showFibonacci').checked) {
-                        console.log(`📐 Batching ${results.fibonacci_levels.length} Fibonacci levels`);
-                        accumulatedFibonacci = results.fibonacci_levels;
-                        chartUpdateBatcher.addFibonacci(results.fibonacci_levels, accumulatedDominantSwing);
-                    }
-                    
-                    // 5. Process signals (batch)
-                    if (results.new_signals && results.new_signals.length > 0 && document.getElementById('showSignals').checked) {
-                        console.log(`📊 Batching ${results.new_signals.length} signals`);
-                        chartUpdateBatcher.addSignals(results.new_signals);
-                    }
-                    
-                    // 6. Process enhanced signals (batch)
-                    if (results.enhanced_signals && Array.isArray(results.enhanced_signals) && results.enhanced_signals.length > 0 && document.getElementById('showEnhancedSignals') && document.getElementById('showEnhancedSignals').checked) {
-                        console.log(`⭐ Batching ${results.enhanced_signals.length} enhanced signals`);
-                        chartUpdateBatcher.addEnhancedSignals(results.enhanced_signals);
-                    }
-                    
-                    // 7. Prepare debug panel updates (batch)
-                    debugUpdates = {
-                        fractalCount: results.total_fractals || 0,
-                        swingCount: results.total_swings || 0,
-                        signalCount: results.total_signals || 0,
-                        enhancedSignalCount: results.total_enhanced_signals || 0,
-                        abcPatternCount: results.total_abc_patterns || 0
-                    };
-                    
-                    // Update market bias display (non-chart update)
-                    if (results.market_bias) {
-                        updateMarketBiasDisplay(results.market_bias);
-                    }
-                    
-                    // Update signal performance stats (non-chart update)
-                    if (results.signal_performance) {
-                        const stats = results.signal_performance;
-                        debugUpdates.activeSignalsCount = stats.active_signals;
-                        debugUpdates.completedSignalsCount = stats.completed_signals;
-                        debugUpdates.signalWinRate = stats.win_rate + '%';
-                        debugUpdates.avgBarsToResolution = stats.avg_bars_to_resolution;
-                    }
-                    
-                    // Handle swing recalculation events (non-chart update)
-                    if (results.lookback_recalculation || results.swing_invalidated) {
-                        const reason = results.lookback_recalculation ? 'lookback window change' : 'swing invalidation';
-                        console.log(`🔄 SWING RECALCULATION: Reloading all swings due to ${reason}`);
-                        // Schedule reload without blocking batch processing
-                        setTimeout(() => {
-                            reloadCurrentSwingState();
-                        }, 100);
-                    }
-                }
-                
-                // Handle swing recalculations from top level
-                if (data.strategy_results && (data.strategy_results.swing_recalculated_for_new_fractal || data.strategy_results.lookback_recalculation)) {
-                    console.log(`🔄 SWING RECALCULATION detected - will reload state after batch processing`);
-                    // Schedule reload after batch processing completes
-                    if (!data.strategy_results.new_swing) {
-                        setTimeout(() => {
-                            reloadCurrentSwingState();
-                        }, 100);
-                    }
-                }
-                
-                // Update data inspector with current bar (non-chart update)
-                if (data.current_bar) {
-                    const barData = {
-                        timestamp: data.timestamp,
-                        open: data.current_bar.open,
-                        high: data.current_bar.high,
-                        low: data.current_bar.low,
-                        close: data.current_bar.close,
-                        volume: data.current_bar.volume
-                    };
-                    updateDataInspector(barData, currentPosition);
-                }
-                
-                // Update performance metrics (non-chart update)
-                if (data.performance) {
-                    updatePerformanceMetrics(data.performance);
-                }
-                
-                // Update position display (non-chart update)
-                updatePositionDisplay();
-                
-                // Update status with progress (non-chart update)
-                const progressPercent = data.progress || (currentPosition / totalBars * 100);
-                updateStatus(`Bar ${currentPosition + 1}/${totalBars} (${progressPercent.toFixed(1)}%) - ${data.timestamp || ''}`);
-                
-                // Show fractal detection info at the beginning
-                if (currentPosition < 10 && data.strategy_results && data.strategy_results.total_fractals === 0) {
-                    updateStatus(`Bar ${currentPosition + 1}/${totalBars} - Need at least 10 bars for first fractal detection (5 before + 5 after)`);
-                }
-                
-                // 8. Batch debug panel updates
-                if (Object.keys(debugUpdates).length > 0) {
-                    chartUpdateBatcher.updateDebugPanel(debugUpdates);
-                }
-                
-                // 🎯 CRITICAL: ALL chart updates are now batched and will be processed in a single operation
-                // This eliminates the 10+ simultaneous chart updates that were causing flashing
-                console.log('✅ BATCHED UPDATE: All updates queued, will process in single batch');
-                
-                // Ensure batcher processes if any updates were queued
-                if (window.chartUpdateBatcher) {
-                    window.chartUpdateBatcher.flushBatch();
-                }
-            }
+            // ❌ MALFORMED FUNCTION REMOVED - The correct initChart function is defined below
             
             // Initialize TradingView Chart
             function initChart() {
@@ -2598,7 +2573,11 @@ async def get_research_dashboard():
                     wickUpColor: '#26a69a',
                     wickDownColor: '#ef5350',
                 });
-                console.log('✅ Candlestick series created');
+                
+                // 🚨 CRITICAL: Make candlestickSeries globally accessible
+                window.candlestickSeries = candlestickSeries;
+                
+                console.log('✅ Candlestick series created and made globally accessible');
                 
                 // Create line series for overlays
                 fractalSeries = chart.addLineSeries({
@@ -2719,10 +2698,10 @@ async def get_research_dashboard():
             
             // Update chart with market data (full range - for initial load)
             function updateChart(data) {
-                console.log(`🎯 DEBUG: updateChart called with ${data ? data.length : 0} bars`);
+                // SILENCED: console.log(`🎯 DEBUG: updateChart called with ${data ? data.length : 0} bars`);
                 
                 if (!chart || !candlestickSeries) {
-                    console.log('🎯 Chart not initialized, calling initChart...');
+                    // SILENCED: console.log('🎯 Chart not initialized, calling initChart...');
                     initChart();
                 }
 
@@ -2739,7 +2718,7 @@ async def get_research_dashboard():
                 // Reset panning flag and chart overlays for new data
                 userHasManuallyPanned = false;
 
-                // Clear all markers through unified manager
+                // Clear all markers through unified manager (for new data load only)
                 if (unifiedMarkerManager) {
                     unifiedMarkerManager.clearAll();
                 }
@@ -2769,11 +2748,9 @@ async def get_research_dashboard():
                     window.currentPositionLine = null;
                 }
 
-                // Clear any existing markers through unified manager
-                if (unifiedMarkerManager) {
-                    unifiedMarkerManager.clearAll();
-                }
-
+                // 🚨 REMOVED: Don't clear markers during navigation - preserve accumulated markers
+                // Markers should persist during navigation, only clear when loading new data
+                
                 // For backtesting: start at currentPosition (which is set by loadData to user's start date)
                 updateChartProgressive(currentPosition);
             }
@@ -2781,7 +2758,7 @@ async def get_research_dashboard():
             
             // Progressive chart update for backtesting (shows data up to current position)
             function updateChartProgressive(position) {
-                console.log(`🎯 DEBUG: updateChartProgressive called with position=${position}, dataLength=${marketData ? marketData.length : 0}`);
+                // SILENCED: console.log(`🎯 DEBUG: updateChartProgressive called with position=${position}, dataLength=${marketData ? marketData.length : 0}`);
                 
                 if (!chart || !candlestickSeries || !marketData) {
                     console.error('❌ Missing required objects:', { chart: !!chart, candlestickSeries: !!candlestickSeries, marketData: !!marketData });
@@ -2790,7 +2767,7 @@ async def get_research_dashboard():
 
                 // Convert user position to data array position
                 const dataPosition = (window.userStartOffset || 0) + position;
-                console.log(`🎯 DEBUG: dataPosition=${dataPosition}, userStartOffset=${window.userStartOffset || 0}`);
+                // SILENCED: console.log(`🎯 DEBUG: dataPosition=${dataPosition}, userStartOffset=${window.userStartOffset || 0}`);
                 
                 // Ensure we don't go out of bounds
                 if (dataPosition >= marketData.length) {
@@ -2800,7 +2777,7 @@ async def get_research_dashboard():
 
                 // Progressive loading: convert and show only data up to current position
                 if (!window.fullChartData) {
-                    console.log(`📊 Converting full dataset ${marketData.length} bars for progressive loading...`);
+                    debugLog('performance', `📊 Converting full dataset ${marketData.length} bars for progressive loading...`);
                     window.fullChartData = marketData.map(bar => ({
                         time: Math.floor(new Date(bar.timestamp).getTime() / 1000),
                         open: bar.open,
@@ -2815,17 +2792,54 @@ async def get_research_dashboard():
                 if (!window.lastChartPosition || window.lastChartPosition > dataPosition) {
                     // Reset needed (first time or going backwards)
                     const progressiveData = window.fullChartData.slice(0, dataPosition + 1);
-                    console.log(`🎯 DEBUG: Setting chart data with ${progressiveData.length} bars (position 0 to ${dataPosition})`);
+                    debugLog('performance', `🎯 DEBUG: Setting chart data with ${progressiveData.length} bars (position 0 to ${dataPosition})`);
+                    
+                    // 🚨 CRITICAL FIX: Proper marker persistence during setData()
+                    let markersToRestore = [];
+                    let hasMarkersToRestore = false;
+                    
+                    if (unifiedMarkerManager && unifiedMarkerManager.getMarkerCount() > 0) {
+                        // Get all current markers for restoration
+                        markersToRestore = Array.from(unifiedMarkerManager.markers.values());
+                        hasMarkersToRestore = markersToRestore.length > 0;
+                        console.log(`🔍 SAVING ${markersToRestore.length} markers before setData operation`);
+                    }
+                    
+                    // Call setData which will clear all markers
                     candlestickSeries.setData(progressiveData);
-                    console.log(`📊 Chart reset: showing ${progressiveData.length}/${window.fullChartData.length} bars (up to position ${dataPosition})`);
+                    console.log(`🔍 setData() completed - all markers cleared by TradingView`);
+                    
+                    // 🚨 IMMEDIATE RESTORATION: Don't wait, restore markers immediately
+                    if (hasMarkersToRestore) {
+                        console.log(`🔍 IMMEDIATELY restoring ${markersToRestore.length} markers`);
+                        
+                        // Method 1: Direct series setMarkers call
+                        try {
+                            candlestickSeries.setMarkers(markersToRestore);
+                            console.log(`✅ Direct setMarkers successful`);
+                        } catch (e) {
+                            console.error(`❌ Direct setMarkers failed:`, e);
+                        }
+                        
+                        // Method 2: Force unified manager to restore its state 
+                        setTimeout(() => {
+                            console.log(`🔍 BACKUP: Forcing unified manager update`);
+                            if (unifiedMarkerManager) {
+                                unifiedMarkerManager.forceUpdate();
+                            }
+                        }, 10);
+                    }
+                    
+                    debugLog('performance', `📊 Chart reset: showing ${progressiveData.length}/${window.fullChartData.length} bars (up to position ${dataPosition})`);
                 } else if (window.lastChartPosition < dataPosition) {
-                    // Add new bars incrementally to avoid jumping
+                    // Add new bars incrementally to avoid jumping - markers should persist
                     for (let i = window.lastChartPosition + 1; i <= dataPosition; i++) {
                         if (window.fullChartData[i]) {
                             candlestickSeries.update(window.fullChartData[i]);
                         }
                     }
-                    console.log(`📊 Incremental update: added ${dataPosition - window.lastChartPosition} bars (now at position ${dataPosition})`);
+                    debugLog('performance', `📊 Incremental update: added ${dataPosition - window.lastChartPosition} bars (now at position ${dataPosition})`);
+                    // Note: Incremental updates via .update() should preserve markers
                 }
                 
                 // Track last position to enable incremental updates
@@ -2857,9 +2871,37 @@ async def get_research_dashboard():
                         const startTime = window.fullChartData[0].time;
                         const endTime = window.fullChartData[dataPosition].time;
                         
+                        // 🚨 CRITICAL FIX: setVisibleRange might interfere with markers
+                        // Store markers before range change
+                        let rangeChangeMarkers = [];
+                        if (unifiedMarkerManager && unifiedMarkerManager.getMarkerCount() > 0) {
+                            rangeChangeMarkers = Array.from(unifiedMarkerManager.markers.values());
+                            console.log(`🔍 Saving ${rangeChangeMarkers.length} markers before setVisibleRange`);
+                        }
+                        
                         // Use built-in range setting for progressive data
+                        console.log('🔍 Calling setVisibleRange...');
                         chart.timeScale().setVisibleRange({ from: startTime, to: endTime });
                         userHasManuallyPanned = false;
+                        
+                        // 🚨 IMMEDIATE RESTORATION after range change
+                        if (rangeChangeMarkers.length > 0) {
+                            console.log(`🔍 IMMEDIATELY restoring ${rangeChangeMarkers.length} markers after setVisibleRange`);
+                            try {
+                                candlestickSeries.setMarkers(rangeChangeMarkers);
+                                console.log(`✅ Markers restored after setVisibleRange`);
+                            } catch (e) {
+                                console.error(`❌ Failed to restore markers after setVisibleRange:`, e);
+                            }
+                        }
+                        
+                        // Additional backup restoration
+                        setTimeout(() => {
+                            console.log('🔍 BACKUP: Force manager update after setVisibleRange');
+                            if (unifiedMarkerManager) {
+                                unifiedMarkerManager.forceUpdate();
+                            }
+                        }, 20);
                         
                         console.log('📏 TradingView optimized view:', {
                             startDate: new Date(startTime * 1000).toISOString().split('T')[0],
@@ -2896,8 +2938,44 @@ async def get_research_dashboard():
                     }
                 }
 
-                // ✅ RESTORED: Direct marker updates for continuous visibility
+                // ✅ RESTORED: Direct marker updates for continuous visibility  
+                // 🔍 DEBUG: Log fractal state before updateAllMarkers
+                console.log(`🔍 BEFORE updateAllMarkers: local=${accumulatedFractals.length}, global=${window.accumulatedFractals ? window.accumulatedFractals.length : 0}, checkbox=${document.getElementById('showFractals').checked}`);
+                console.log(`🔍 candlestickSeries object:`, candlestickSeries);
+                console.log(`🔍 unifiedMarkerManager.series same as candlestickSeries?`, unifiedMarkerManager && unifiedMarkerManager.series === candlestickSeries);
+                
+                // Update markers immediately
                 updateAllMarkers();
+                
+                console.log(`🔍 AFTER updateAllMarkers: unified manager has ${unifiedMarkerManager ? unifiedMarkerManager.getMarkerCount() : 'no manager'} markers`);
+                
+                // 🚨 CRITICAL: Final marker persistence verification
+                setTimeout(() => {
+                    const managerCount = unifiedMarkerManager ? unifiedMarkerManager.getMarkerCount() : 0;
+                    console.log(`🔍 100ms VERIFICATION: Manager has ${managerCount} markers`);
+                    
+                    // If manager has markers but they're not visible, force restoration
+                    if (unifiedMarkerManager && managerCount > 0) {
+                        console.log('🔍 FINAL FORCE: Ensuring markers are visible');
+                        const allMarkers = Array.from(unifiedMarkerManager.markers.values());
+                        try {
+                            candlestickSeries.setMarkers(allMarkers);
+                            console.log(`✅ FINAL: ${allMarkers.length} markers forcibly restored`);
+                        } catch (e) {
+                            console.error(`❌ FINAL restoration failed:`, e);
+                        }
+                    } else if (managerCount === 0) {
+                        // Check if we should have markers from accumulated data
+                        const fractalSource = (accumulatedFractals.length > 0) ? accumulatedFractals : window.accumulatedFractals;
+                        const shouldHaveMarkers = document.getElementById('showFractals').checked && fractalSource && fractalSource.length > 0;
+                        
+                        if (shouldHaveMarkers) {
+                            console.log(`🚨 EMERGENCY: Manager empty but should have ${fractalSource.length} fractals - rebuilding`);
+                            unifiedMarkerManager.loadFractals(fractalSource);
+                            unifiedMarkerManager.forceUpdate();
+                        }
+                    }
+                }, 100);
             }
             
             // ✅ RESTORED - Direct fractal loading for continuous visibility
@@ -2966,10 +3044,27 @@ async def get_research_dashboard():
             
             // Dynamic chart update functions for real-time strategy visualization
             
+            // Track last update time to prevent rapid calls
+            let lastUpdateAllMarkersCall = 0;
+            
             // ✅ UNIFIED MARKER SYSTEM - No more flashing or race conditions
             function updateAllMarkers() {
                 try {
-                    console.log('🔄 Updating all chart markers and lines...');
+                    // Prevent rapid successive calls
+                    const now = Date.now();
+                    const timeSinceLastCall = now - lastUpdateAllMarkersCall;
+                    
+                    console.log(`🔄 updateAllMarkers CALLED - ${timeSinceLastCall}ms since last call`);
+                    
+                    if (timeSinceLastCall < 50) {
+                        console.log('🚨 THROTTLED: updateAllMarkers called too rapidly, skipping');
+                        return;
+                    }
+                    
+                    lastUpdateAllMarkersCall = now;
+                    
+                    console.trace();
+                    debugLog('markers', '🔄 Updating all chart markers and lines...');
 
                     // Safety check for unified manager
                     if (!unifiedMarkerManager) {
@@ -2979,40 +3074,46 @@ async def get_research_dashboard():
 
                     // Handle fractals
                     const showFractals = document.getElementById('showFractals').checked;
-                    console.log(`🔄 Processing fractals: checkbox=${showFractals}, accumulated=${accumulatedFractals.length}`);
+                    
+                    // 🚨 CRITICAL FIX: Use consistent fractal source (check both local and global)
+                    const fractalSource = (accumulatedFractals.length > 0) ? accumulatedFractals : window.accumulatedFractals;
+                    const totalFractals = fractalSource ? fractalSource.length : 0;
+                    
+                    debugLog('markers', `🔄 Processing fractals: checkbox=${showFractals}, accumulated=${totalFractals} (local: ${accumulatedFractals.length}, global: ${window.accumulatedFractals ? window.accumulatedFractals.length : 0})`);
+                    
                     if (!showFractals) {
                         unifiedMarkerManager.removeMarkersByPattern('fractal_');
-                        console.log('Fractals hidden by checkbox');
+                        debugLog('markers', 'Fractals hidden by checkbox');
                     } else {
                         // Load all accumulated fractals using unified manager
-                        if (accumulatedFractals.length > 0) {
-                            unifiedMarkerManager.loadFractals(accumulatedFractals);
-                            console.log(`📍 Showing ${accumulatedFractals.length} fractals`);
+                        if (fractalSource && totalFractals > 0) {
+                            unifiedMarkerManager.loadFractals(fractalSource);
+                            debugLog('markers', `📍 Showing ${totalFractals} fractals from ${fractalSource === accumulatedFractals ? 'local' : 'global'} source`);
                         } else {
-                            console.log('No fractals accumulated yet');
+                            debugLog('markers', 'No fractals accumulated in either local or global arrays');
                         }
                     }
                     
                     // Handle swing lines
                     const showSwings = document.getElementById('showSwings').checked;
-                    console.log(`🔄 Processing swings: checkbox=${showSwings}, accumulated=${accumulatedSwings.length}`);
+                    debugLog('markers', `🔄 Processing swings: checkbox=${showSwings}, accumulated=${accumulatedSwings.length}`);
                     if (!showSwings) {
                         swingLineManager.removeAllSwingLines();
-                        console.log('Swing lines hidden by checkbox');
+                        debugLog('markers', 'Swing lines hidden by checkbox');
                     } else {
                         // Load all accumulated swings using proper line management
                         if (accumulatedSwings.length > 0) {
                             swingLineManager.loadAllSwings(accumulatedSwings);
-                            console.log(`📈 Showing ${accumulatedSwings.length} swing lines`);
+                            debugLog('markers', `📈 Showing ${accumulatedSwings.length} swing lines`);
                         } else {
-                            console.log('No swings accumulated yet');
+                            debugLog('markers', 'No swings accumulated yet');
                         }
                     }
 
                     // Handle Fibonacci levels
                     if (!document.getElementById('showFibonacci').checked) {
                         fibonacciManager.clearFibonacci();
-                        console.log('Fibonacci levels hidden by checkbox');
+                        debugLog('markers', 'Fibonacci levels hidden by checkbox');
                     } else {
                         // Show Fibonacci levels for the dominant swing
                         if (accumulatedFibonacci && accumulatedFibonacci.length > 0 && accumulatedDominantSwing) {
@@ -3559,10 +3660,18 @@ async def get_research_dashboard():
             // Load all accumulated strategy elements for current position
             async function loadAccumulatedStrategyElements(barIndex) {
                 try {
+                    // 🚨 TEMPORARY FIX: Completely disable this function to test marker persistence
+                    console.log(`🚨 DISABLED: loadAccumulatedStrategyElements called for bar ${barIndex} - FUNCTION DISABLED FOR TESTING`);
+                    return; // Exit immediately without doing anything
+                    
+                    // 🔍 DEBUG: Add stack trace to find who's calling this function
+                    console.log(`🔍 STACK TRACE: loadAccumulatedStrategyElements called for bar ${barIndex}`);
+                    console.trace();
+                    
                     // Throttle calls to prevent resource exhaustion
                     const now = Date.now();
                     if (now - lastLoadAccumulatedCall < 200) { // Minimum 200ms between calls
-                        console.log(`⏳ Throttling loadAccumulatedStrategyElements call for bar ${barIndex}`);
+                        debugLog('performance', `⏳ Throttling loadAccumulatedStrategyElements call for bar ${barIndex}`);
                         return;
                     }
                     lastLoadAccumulatedCall = now;
@@ -3575,13 +3684,21 @@ async def get_research_dashboard():
                             const results = jumpData.data.strategy_results;
                             
                             // Log the total fractals count
-                            console.log(`📊 Strategy results: ${results.total_fractals || 0} total fractals, ${results.total_swings || 0} total swings`);
+                            debugLog('performance', `📊 Strategy results: ${results.total_fractals || 0} total fractals, ${results.total_swings || 0} total swings`);
                             
-                            // For now, use loadAllStrategyElements which calls the analyze-all endpoint
-                            // This will trigger a full analysis and fractal loading
-                            await loadAllStrategyElements();
+                            // 🚨 CRITICAL FIX: Don't call loadAllStrategyElements to prevent infinite recursion
+                            // Process the jump data directly without triggering a full reload
+                            if (results.fractals && results.fractals.length > 0) {
+                                const fractalData = results.fractals.map(fractal => ({
+                                    timestamp: fractal.timestamp,
+                                    fractal_type: fractal.type
+                                }));
+                                if (unifiedMarkerManager && document.getElementById('showFractals').checked) {
+                                    unifiedMarkerManager.loadFractals(fractalData);
+                                }
+                            }
                             
-                            console.log(`Loaded strategy elements for bar ${barIndex}`);
+                            debugLog('performance', `Loaded strategy elements for bar ${barIndex}`);
                         }
                     }
                 } catch (error) {
@@ -3599,7 +3716,7 @@ async def get_research_dashboard():
                 }));
 
                 unifiedMarkerManager.loadFractals(fractalData);
-                console.log(`Loaded ${fractals.length} accumulated fractals through unified manager`);
+                debugLog('markers', `Loaded ${fractals.length} accumulated fractals through unified manager`);
             }
 
             // ✅ UNIFIED - Direct fractal processing for continuous visibility
@@ -3615,10 +3732,10 @@ async def get_research_dashboard():
                     accumulatedFractals.push(fractal);
                     window.accumulatedFractals.push(fractal); // Sync with global reference
                     unifiedMarkerManager.addFractal(fractal); // No race conditions
-                    console.log(`🔺 UNIFIED: New ${fractal.fractal_type} fractal added to chart at ${fractal.timestamp} (bar ${fractal.bar_index})`);
-                    console.log(`🔺 ACCUMULATED: Total fractals now: ${accumulatedFractals.length}`);
+                    // SILENCED: console.log(`🔺 UNIFIED: New ${fractal.fractal_type} fractal added to chart at ${fractal.timestamp} (bar ${fractal.bar_index})`);
+                    // SILENCED: console.log(`🔺 ACCUMULATED: Total fractals now: ${accumulatedFractals.length}`);
                 } else {
-                    console.log(`⚠️ DUPLICATE: Fractal at ${fractal.timestamp} already exists, skipping`);
+                    // SILENCED: console.log(`⚠️ DUPLICATE: Fractal at ${fractal.timestamp} already exists, skipping`);
                 }
             }
             
@@ -3635,7 +3752,7 @@ async def get_research_dashboard():
                 if (!exists) {
                     // Add to accumulated swings array
                     accumulatedSwings.push(swing);
-                    console.log(`📈 New swing detected: ${swing.direction} swing from ${swing.start_fractal.timestamp} to ${swing.end_fractal.timestamp}, total: ${accumulatedSwings.length}`);
+                    // SILENCED: console.log(`📈 New swing detected: ${swing.direction} swing from ${swing.start_fractal.timestamp} to ${swing.end_fractal.timestamp}, total: ${accumulatedSwings.length}`);
                     
                     // 🚨 CRITICAL: Recalculate dominance for all accumulated swings
                     // This ensures only the largest swing overall is marked as dominant
@@ -3646,7 +3763,7 @@ async def get_research_dashboard():
                         swingLineManager.loadAllSwings(accumulatedSwings);
                     }
                 } else {
-                    console.log(`⚠️ DUPLICATE: Swing from ${swing.start_fractal.timestamp} to ${swing.end_fractal.timestamp} already exists, skipping`);
+                    // SILENCED: console.log(`⚠️ DUPLICATE: Swing from ${swing.start_fractal.timestamp} to ${swing.end_fractal.timestamp} already exists, skipping`);
                 }
             }
             
@@ -3680,7 +3797,7 @@ async def get_research_dashboard():
                         end_price: backendDominantSwing.end_fractal.price,
                         direction: backendDominantSwing.direction
                     };
-                    console.log(`🔄 Updated accumulatedDominantSwing for Fibonacci manager:`, accumulatedDominantSwing);
+                    debugLog('swing_details', `🔄 Updated accumulatedDominantSwing for Fibonacci manager:`, accumulatedDominantSwing);
                 } else {
                     console.warn('⚠️ No backend-dominant swing found in accumulated swings');
                     accumulatedDominantSwing = null; // Clear if no dominant swing
@@ -3843,7 +3960,7 @@ async def get_research_dashboard():
                     );
                     
                     if (existingLines) {
-                        console.log(`Price lines already exist for signal at ${signal.timestamp} - skipping`);
+                        debugLog('markers', `Price lines already exist for signal at ${signal.timestamp} - skipping`);
                         return;
                     }
                     
@@ -3886,7 +4003,7 @@ async def get_research_dashboard():
                         takeProfitLine: takeProfitLine
                     });
                     
-                    console.log(`Added signal levels for ${signal.signal_type} at ${signal.price}`);
+                    debugLog('markers', `Added signal levels for ${signal.signal_type} at ${signal.price}`);
                 } catch (error) {
                     console.error('Error adding signal levels:', error);
                 }
@@ -4193,7 +4310,7 @@ async def get_research_dashboard():
                     document.body.removeChild(a);
                     window.URL.revokeObjectURL(url);
                     
-                    console.log(`Exported ${result.data.length} signal performance records to CSV`);
+                    debugLog('performance', `Exported ${result.data.length} signal performance records to CSV`);
                 } catch (error) {
                     console.error('Error exporting signal performance:', error);
                     alert('Error exporting signal performance data');
@@ -4353,9 +4470,10 @@ async def get_research_dashboard():
                         // Update chart with new data (will show only up to current position)
                         updateChart(marketData);
 
-                        // Clear all markers when loading new data through unified manager
+                        // Clear all markers when loading completely new data through unified manager
                         if (unifiedMarkerManager) {
                             unifiedMarkerManager.clearAll();
+                            // Note: markers will be restored by loadAllStrategyElements() call below
                         }
 
                         console.log('✅ Chart updated with market data, backtesting engine loaded successfully');
@@ -4373,15 +4491,27 @@ async def get_research_dashboard():
                             const analysisResult = await analysisResponse.json();
                             if (analysisResult.success) {
                                 console.log(`✅ Background analysis complete: ${analysisResult.fractals_detected || 0} fractals detected`);
-                                // Load all detected elements for display
-                                loadAllStrategyElements();
+                                // 🚨 CRITICAL FIX: Only load strategy elements if we don't already have accumulated data
+                                if ((!accumulatedFractals || accumulatedFractals.length === 0) && 
+                                    (!window.accumulatedFractals || window.accumulatedFractals.length === 0)) {
+                                    console.log('📍 No accumulated fractals found, loading from database...');
+                                    loadAllStrategyElements();
+                                } else {
+                                    console.log(`📍 Using existing accumulated fractals (${accumulatedFractals.length} local, ${window.accumulatedFractals ? window.accumulatedFractals.length : 0} global)`);
+                                }
                             } else {
                                 console.warn('⚠️ Fractal analysis failed:', analysisResult.message);
                             }
                         } catch (error) {
                             console.warn('Backend synchronization error:', error);
-                            // Fallback: try to load any existing fractals
-                            loadAllStrategyElements();
+                            // 🚨 CRITICAL FIX: Only fallback to loadAllStrategyElements if no accumulated data exists
+                            if ((!accumulatedFractals || accumulatedFractals.length === 0) && 
+                                (!window.accumulatedFractals || window.accumulatedFractals.length === 0)) {
+                                console.log('📍 No accumulated fractals found, trying database fallback...');
+                                loadAllStrategyElements();
+                            } else {
+                                console.log(`📍 Preserving existing accumulated fractals instead of database fallback`);
+                            }
                         }
                         
                         // Update chart to show starting position (position 0)
@@ -4853,22 +4983,51 @@ async def get_research_dashboard():
 
                         // Add fractals to chart if checkbox is checked
                         if (fractalsResult.fractals.length > 0 && document.getElementById('showFractals').checked && unifiedMarkerManager) {
-                            console.log('📍 Processing fractals for chart display...');
+                            debugLog('markers', '📍 Processing fractals for chart display...');
 
-                            // Convert database fractals to proper format
-                            const fractalData = fractalsResult.fractals.map(fractal => ({
-                                timestamp: fractal.timestamp,
-                                fractal_type: fractal.type
-                            }));
+                            // 🚨 CRITICAL FIX: Only clear accumulated fractals if this is a fresh data load
+                            // During navigation, preserve existing accumulated fractals
+                            const isNavigation = (accumulatedFractals.length > 0 || (window.accumulatedFractals && window.accumulatedFractals.length > 0));
+                            
+                            if (!isNavigation) {
+                                // Fresh data load - clear and rebuild
+                                accumulatedFractals = [];
+                                window.accumulatedFractals = [];
+                                debugLog('markers', '📍 Fresh data load - clearing accumulated fractals');
+                            } else {
+                                debugLog('markers', '📍 Navigation mode - preserving existing accumulated fractals');
+                            }
 
-                            unifiedMarkerManager.loadFractals(fractalData);
-                            console.log(`📍 Loaded ${fractalData.length} fractal markers through unified manager`);
-                        } else {
-                            console.log('📍 No fractals to display:', {
-                                fractalCount: fractalsResult.fractals?.length || 0,
-                                checkboxChecked: document.getElementById('showFractals').checked,
-                                hasManager: !!unifiedMarkerManager
+                            // Convert database fractals to proper format and accumulate them
+                            fractalsResult.fractals.forEach(fractal => {
+                                const fractalData = {
+                                    timestamp: fractal.timestamp,
+                                    fractal_type: fractal.type
+                                };
+                                
+                                // Only add if not already exists (prevent duplicates)
+                                const exists = accumulatedFractals.some(f => f.timestamp === fractalData.timestamp && f.fractal_type === fractalData.fractal_type);
+                                if (!exists) {
+                                    accumulatedFractals.push(fractalData);
+                                    window.accumulatedFractals.push(fractalData);
+                                }
                             });
+
+                            // Load all accumulated fractals into unified manager
+                            unifiedMarkerManager.loadFractals(accumulatedFractals);
+                            debugLog('markers', `📍 Loaded and accumulated ${accumulatedFractals.length} fractal markers through unified manager`);
+                        } else if (fractalsResult.fractals.length === 0) {
+                            // 🚨 CRITICAL FIX: Don't clear markers if database is empty but we have accumulated data
+                            const hasAccumulatedFractals = (accumulatedFractals.length > 0 || (window.accumulatedFractals && window.accumulatedFractals.length > 0));
+                            if (hasAccumulatedFractals) {
+                                debugLog('markers', `📍 Database empty but preserving ${accumulatedFractals.length || window.accumulatedFractals.length} accumulated fractals`);
+                            } else {
+                                debugLog('markers', '📍 No fractals to display (database empty, no accumulated data):', {
+                                    fractalCount: fractalsResult.fractals?.length || 0,
+                                    checkboxChecked: document.getElementById('showFractals').checked,
+                                    hasManager: !!unifiedMarkerManager
+                                });
+                            }
                         }
                     } else {
                         console.log('📍 Failed to load fractals:', fractalsResult.message);
@@ -4983,13 +5142,13 @@ async def get_research_dashboard():
                     
                     // Debug: Log current position and data
                     const dataPosition = window.userStartOffset + currentPosition;
-                    console.log(`🎮 Replay ${action}: user position ${currentPosition}, data position ${dataPosition}/${totalBars}`);
-                    console.log(`🔍 Debug: userStartOffset=${window.userStartOffset}, maxUserPosition=${window.maxUserPosition}, userEndOffset=${window.userEndOffset}`);
+                    // SILENCED: console.log(`🎮 Replay ${action}: user position ${currentPosition}, data position ${dataPosition}/${totalBars}`);
+                    // SILENCED: console.log(`🔍 Debug: userStartOffset=${window.userStartOffset}, maxUserPosition=${window.maxUserPosition}, userEndOffset=${window.userEndOffset}`);
                     if (marketData[dataPosition]) {
-                        console.log(`📅 Current bar timestamp: ${marketData[dataPosition].timestamp}`);
+                        // SILENCED: console.log(`📅 Current bar timestamp: ${marketData[dataPosition].timestamp}`);
                     }
                     if (marketData[dataPosition - 1] && action === 'next') {
-                        console.log(`📅 Previous bar timestamp: ${marketData[dataPosition - 1].timestamp}`);
+                        // SILENCED: console.log(`📅 Previous bar timestamp: ${marketData[dataPosition - 1].timestamp}`);
                     }
 
                     // Update chart progressively to show only bars up to current position
@@ -5029,28 +5188,28 @@ async def get_research_dashboard():
                             
                             // Convert absolute data position to relative position for backend
                             const relativePosition = currentPosition; // Backend should use user's relative position, not absolute data position
-                            console.log(`🔄 Calling backend: /api/backtest/jump/${relativePosition} (relative pos ${relativePosition}, was abs pos ${dataPosition}) (seq: ${requestSequence})`);
+                            // SILENCED: console.log(`🔄 Calling backend: /api/backtest/jump/${relativePosition} (relative pos ${relativePosition}, was abs pos ${dataPosition}) (seq: ${requestSequence})`);
                             const result = await fetch(`/api/backtest/jump/${relativePosition}`, { method: 'POST' });
-                            console.log(`📡 Backend response status: ${result.status} (seq: ${requestSequence})`);
+                            // SILENCED: console.log(`📡 Backend response status: ${result.status} (seq: ${requestSequence})`);
                             const data = await result.json();
                             
                             // Check if this response is still relevant (user might have moved on)
                             const currentDataPosition = window.userStartOffset + currentPosition;
                             if (currentDataPosition !== expectedDataPosition) {
-                                console.log(`⚠️ Ignoring stale response: expected position ${expectedDataPosition}, current position ${currentDataPosition} (seq: ${requestSequence})`);
+                                // SILENCED: console.log(`⚠️ Ignoring stale response: expected position ${expectedDataPosition}, current position ${currentDataPosition} (seq: ${requestSequence})`);
                                 return; // Ignore stale response
                             }
                             
-                            console.log(`📊 Processing current response:`, data, `(seq: ${requestSequence})`);
+                            // SILENCED: console.log(`📊 Processing current response:`, data, `(seq: ${requestSequence})`);
                         
                         if (data.success && data.data) {
                             // Update strategy panels with live strategy data
                             if (data.data.strategy_results) {
                                 const results = data.data.strategy_results;
-                                console.log(`🔍 Strategy results at position ${currentPosition}:`, results);
-                                console.log(`🔍 Backend bar_index: ${results.bar_index}, Frontend position: ${currentPosition}`);
-                                console.log(`🔍 New fractal:`, results.new_fractal);
-                                console.log(`🔍 All result keys:`, Object.keys(results));
+                                // SILENCED: console.log(`🔍 Strategy results at position ${currentPosition}:`, results);
+                                // SILENCED: console.log(`🔍 Backend bar_index: ${results.bar_index}, Frontend position: ${currentPosition}`);
+                                // SILENCED: console.log(`🔍 New fractal:`, results.new_fractal);
+                                // SILENCED: console.log(`🔍 All result keys:`, Object.keys(results));
                                 document.getElementById('fractalCount').textContent = results.total_fractals || 0;
                                 document.getElementById('swingCount').textContent = results.total_swings || 0;
                                 document.getElementById('signalCount').textContent = results.total_signals || 0;
@@ -5062,8 +5221,8 @@ async def get_research_dashboard():
 
                                 // Add real-time fractals and swings to chart ONLY if checkboxes are checked
                                 if (results.new_fractal && document.getElementById('showFractals').checked) {
-                                    console.log(`🎯 TIMING: Adding fractal to chart at frontend position ${currentPosition}, fractal detected at backend bar ${results.bar_index}`);
-                                    console.log(`🎯 FRACTAL DETAILS:`, results.new_fractal);
+                                    // SILENCED: console.log(`🎯 TIMING: Adding fractal to chart at frontend position ${currentPosition}, fractal detected at backend bar ${results.bar_index}`);
+                                    // SILENCED: console.log(`🎯 FRACTAL DETAILS:`, results.new_fractal);
                                     addNewFractalToChart(results.new_fractal);
                                 }
                                 
@@ -5089,8 +5248,8 @@ async def get_research_dashboard():
                     const userTotalBars = totalBars - window.userStartOffset;
                     updateStatus(`📊 Bar ${currentPosition + 1}/${userTotalBars} - ${marketData[dataPosition]?.timestamp || 'N/A'}`);
                     
-                    // ✅ RESTORED: Direct marker updates for continuous visibility
-                    updateAllMarkers();
+                    // 🚨 REMOVED DUPLICATE: updateAllMarkers is already called by updateChartProgressive
+                    // updateAllMarkers();
                     
                 } catch (error) {
                     console.error('Replay action error:', error);
@@ -5561,10 +5720,6 @@ async def get_research_dashboard():
             
             // Drag functionality temporarily removed - focusing on core backtesting features
             
-            function updateStatus(message) {
-                document.getElementById('statusBar').textContent = message;
-            }
-            
             function showLoading(show) {
                 // More aggressive loading indicator hiding
                 const loadingSelectors = [
@@ -5748,35 +5903,7 @@ async def get_research_dashboard():
             }
 
             // Initialize app after TradingView library loads
-            function initializeApp() {
-                console.log('✅ Initializing application...');
-                try {
-                    initChart();
-                    console.log('✅ Chart initialized successfully');
-                    
-                    // Initialize lookback indicator manager
-                    lookbackManager = new LookbackIndicatorManager();
-                    console.log('✅ Lookback indicator manager initialized');
-                    
-                    initWebSocket();
-                    console.log('✅ WebSocket initialized');
-                    
-                    loadAvailableSymbols();
-                    console.log('✅ Loading symbols...');
-                    
-                    loadAvailableDateRanges();
-                    console.log('✅ Loading date ranges...');
-                    
-                    // Show welcome message on initial load
-                    showWelcomeMessage();
-                    console.log('✅ Welcome message shown');
-                    
-                    // Status will be updated by loadAvailableDateRanges()
-                } catch (error) {
-                    console.error('❌ Error during app initialization:', error);
-                    updateStatus('Error: Failed to initialize dashboard');
-                }
-            }
+            // ✅ Function moved to top of script section to avoid reference errors
             
             // Load available date ranges for user selection (no auto-loading)
             async function loadAvailableDateRanges() {
@@ -5810,19 +5937,52 @@ async def get_research_dashboard():
             
             // Cleanup on page unload
             // Clean up any existing intervals on page load/reload
-            window.addEventListener('load', function() {
-                // Force stop any running intervals from previous session
+            // ✅ EMERGENCY STOP FUNCTION - Call this to immediately halt all auto-updates
+            function emergencyStopAllUpdates() {
+                // Clear all possible intervals and timeouts
                 if (playInterval) {
                     clearInterval(playInterval);
                     playInterval = null;
+                    console.log('🛑 Emergency stop: playInterval cleared');
                 }
+                
+                if (swingStateReloadTimeout) {
+                    clearTimeout(swingStateReloadTimeout);
+                    swingStateReloadTimeout = null;
+                    console.log('🛑 Emergency stop: swingStateReloadTimeout cleared');
+                }
+                
+                // Stop any unified marker manager updates
+                if (unifiedMarkerManager && unifiedMarkerManager.updateTimeout) {
+                    clearTimeout(unifiedMarkerManager.updateTimeout);
+                    unifiedMarkerManager.updateTimeout = null;
+                    console.log('🛑 Emergency stop: unifiedMarkerManager timeout cleared');
+                }
+                
+                // Reset play state
                 isPlaying = false;
                 const playBtn = document.getElementById('playBtn');
                 if (playBtn) {
                     playBtn.textContent = '▶️';
                     playBtn.classList.remove('active');
                 }
+                
+                console.log('🛑 EMERGENCY STOP: All auto-updates halted');
+                updateStatus('⏸️ All automatic updates stopped - Chart is now idle');
+            }
+
+            window.addEventListener('load', function() {
+                // Force stop any running intervals from previous session
+                emergencyStopAllUpdates();
                 console.log('🧹 Page loaded: cleaned up any leftover intervals');
+            });
+
+            // Add keyboard shortcut for emergency stop (ESC key)
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape') {
+                    emergencyStopAllUpdates();
+                    console.log('⌨️ Emergency stop triggered via ESC key');
+                }
             });
 
             // 🚨 CRITICAL FIX: Function to reload current swing state when recalculation happens
