@@ -81,25 +81,73 @@ class ABCPattern:
     fibonacci_confluence: Optional[float] = None  # If Wave C ends at Fib level
 ```
 
-### Detection Algorithm
+### Detection Algorithm (🚨 UPDATED JULY 2025)
 
-1. **Fractal-Based Wave Identification**:
-   - Use existing fractal detection to identify wave start/end points
-   - Minimum 3 fractals required for ABC pattern
+🔥 **MAJOR IMPROVEMENT**: The ABC pattern detection has been completely rewritten to eliminate overlapping patterns and ensure clean, single pattern detection.
 
-2. **Wave Validation**:
-   - Wave A: Any correction against dominant trend
-   - Wave B: 23.6% - 138.2% retracement of Wave A
-   - Wave C: 61.8% - 261.8% extension of Wave A
+#### **Previous Issues (Fixed)**
+- **Sliding Window Problem**: Old algorithm generated 14+ overlapping patterns by testing every fractal combination
+- **Multiple Pattern Noise**: Frontend overwhelmed with too many simultaneous patterns
+- **Incomplete Pattern Display**: Patterns detected before Wave C was actually complete
 
-3. **Pattern Classification**:
-   - Zigzag: B < 78.6% of A, C > 100% of A
-   - Flat: B > 78.6% of A, C ≈ 100% of A
-   - Triangle: Converging wave structure
+#### **New Clean Detection Logic**
 
-4. **Fibonacci Confluence Check**:
-   - Verify if Wave C completion aligns with Fibonacci levels
-   - Higher probability if confluence exists
+1. **Complete Pattern Requirement**:
+   - **Minimum 4 fractals** required for complete ABC pattern
+   - Wave C must end at an actual fractal (not current price)
+   - Only returns patterns where Wave C is definitively complete
+
+2. **Best Pattern Selection**:
+   - Algorithm works **backwards from most recent fractals**
+   - Uses quality scoring to select the **single best pattern**
+   - Eliminates overlapping patterns by choosing optimal candidates
+
+3. **Pattern Quality Scoring**:
+   ```python
+   def _score_abc_pattern(pattern):
+       score = 0.0
+       
+       # Base score for complete patterns
+       if pattern.is_complete: score += 0.3
+       
+       # Wave B retracement quality (50%-61.8% ideal)
+       if 0.50 <= wave_b_ratio <= 0.618: score += 0.3
+       elif 0.382 <= wave_b_ratio <= 0.50: score += 0.2
+       
+       # Wave C Fibonacci extension quality
+       if abs(wave_c_ratio - 1.0) <= 0.05: score += 0.3  # Perfect 100%
+       if abs(wave_c_ratio - 0.618) <= 0.05: score += 0.25  # Perfect 62%
+       if abs(wave_c_ratio - 1.27) <= 0.05: score += 0.25  # Perfect 127%
+       
+       # Fibonacci confluence bonus
+       if fibonacci_confluence: score += 0.1
+       
+       return min(score, 1.0)
+   ```
+
+4. **Validation Criteria**:
+   - Wave A: Must move AGAINST dominant swing direction (correction)
+   - Wave B: 38.2% - 61.8% retracement of Wave A
+   - Wave C: 61.8% - 127% extension of Wave A (with tolerance)
+   - All waves must have alternating directions (A ≠ B ≠ C)
+
+5. **Fibonacci Confluence Check**:
+   - Verify if Wave C completion aligns with dominant swing Fibonacci levels
+   - Bonus scoring for confluence patterns
+
+#### **Key Algorithm Changes**
+
+```python
+# OLD: Generated multiple overlapping patterns
+for i in range(len(swing_fractals) - 2):
+    # Created patterns for every triplet - caused 14+ patterns
+
+# NEW: Single best pattern selection
+for i in range(len(swing_fractals) - 3, -1, -1):  # Work backwards
+    # Find complete 4-fractal patterns
+    # Score each pattern for quality
+    # Return only the highest-scoring pattern
+```
 
 ## Visual Representation
 
@@ -208,13 +256,16 @@ ABC_CONFIG = {
 ## ✅ **CURRENT IMPLEMENTATION STATUS**
 
 ### Completed Features
-1. **ABC Pattern Detection**: ✅ Fully implemented and tested
-2. **Fibonacci Confluence**: ✅ Wave B and C validation with Fib levels
-3. **Visual Rendering**: ✅ Real-time chart visualization with wave labels
-4. **Pattern Filtering**: ✅ Time-based filtering to prevent future patterns
-5. **Direction Clearing**: ✅ Patterns clear when dominant swing direction changes
-6. **UI Stability**: ✅ Throttled updates to prevent flashing
-7. **Comprehensive Testing**: ✅ Unit tests covering all ABC logic
+1. **ABC Pattern Detection**: ✅ **FULLY REWRITTEN** for clean single pattern detection (July 2025)
+2. **Pattern Quality Scoring**: ✅ **NEW** - Fibonacci-based scoring to select best patterns
+3. **Complete Pattern Logic**: ✅ **FIXED** - Only detects patterns with Wave C at fractals
+4. **Overlapping Prevention**: ✅ **SOLVED** - Eliminated 14+ pattern noise issue
+5. **Fibonacci Confluence**: ✅ Wave B and C validation with Fib levels
+6. **Visual Rendering**: ✅ Real-time chart visualization with wave labels
+7. **Pattern Filtering**: ✅ Time-based filtering to prevent future patterns
+8. **Direction Clearing**: ✅ Patterns clear when dominant swing direction changes
+9. **UI Stability**: ✅ Throttled updates to prevent flashing
+10. **Comprehensive Testing**: ✅ Unit tests covering all ABC logic
 
 ### Validated Functionality
 - **Pattern Structure**: Wave A ≠ Wave B ≠ Wave C directions validated

@@ -878,53 +878,65 @@ class FibonacciStrategy:
         # 4.5. Update signal performance tracking for active signals
         self.update_signal_performance_tracking(df, current_index)
         
-        # 5. ABC Pattern Detection
+        # 5. ABC Pattern Detection (now returns only the best pattern)
         abc_patterns = self.detect_abc_patterns(df, current_index)
         if abc_patterns:
-            # Store ABC patterns
-            self.abc_patterns.extend(abc_patterns)
+            # We now get only the best pattern, so check if it's new
+            best_pattern = abc_patterns[0]
+            
+            # Check if this is a new pattern (not already stored)
+            is_new_pattern = True
+            for existing_pattern in self.abc_patterns:
+                if (existing_pattern.wave_a.start_timestamp == best_pattern.wave_a.start_timestamp and
+                    existing_pattern.wave_c.end_timestamp == best_pattern.wave_c.end_timestamp):
+                    is_new_pattern = False
+                    break
+            
+            if is_new_pattern:
+                # Store only new patterns to avoid duplicates
+                self.abc_patterns.append(best_pattern)
+                
+                logger.debug(f"🌊 NEW ABC Pattern: {best_pattern.pattern_type} - Wave A: {best_pattern.wave_a.direction} {best_pattern.wave_a.points:.1f}pts, Wave B: {best_pattern.wave_b.direction} {best_pattern.wave_b.points:.1f}pts, Wave C: {best_pattern.wave_c.direction} {best_pattern.wave_c.points:.1f}pts")
 
-            # Add latest pattern to results
-            latest_pattern = abc_patterns[-1]
-            logger.debug(f"🌊 ABC Pattern: {latest_pattern.pattern_type} - Wave A: {latest_pattern.wave_a.direction} {latest_pattern.wave_a.points:.1f}pts, Wave B: {latest_pattern.wave_b.direction} {latest_pattern.wave_b.points:.1f}pts, Wave C: {latest_pattern.wave_c.direction} {latest_pattern.wave_c.points:.1f}pts")
-
-            # Send new ABC pattern to frontend
-            results['new_abc_pattern'] = {
-                'wave_a': {
-                    'start_timestamp': latest_pattern.wave_a.start_timestamp.isoformat(),
-                    'end_timestamp': latest_pattern.wave_a.end_timestamp.isoformat(),
-                    'start_price': latest_pattern.wave_a.start_price,
-                    'end_price': latest_pattern.wave_a.end_price,
-                    'direction': latest_pattern.wave_a.direction,
-                    'points': latest_pattern.wave_a.points,
-                    'bars': latest_pattern.wave_a.bars
-                },
-                'wave_b': {
-                    'start_timestamp': latest_pattern.wave_b.start_timestamp.isoformat(),
-                    'end_timestamp': latest_pattern.wave_b.end_timestamp.isoformat(),
-                    'start_price': latest_pattern.wave_b.start_price,
-                    'end_price': latest_pattern.wave_b.end_price,
-                    'direction': latest_pattern.wave_b.direction,
-                    'points': latest_pattern.wave_b.points,
-                    'bars': latest_pattern.wave_b.bars
-                },
-                'wave_c': {
-                    'start_timestamp': latest_pattern.wave_c.start_timestamp.isoformat(),
-                    'end_timestamp': latest_pattern.wave_c.end_timestamp.isoformat(),
-                    'start_price': latest_pattern.wave_c.start_price,
-                    'end_price': latest_pattern.wave_c.end_price,
-                    'direction': latest_pattern.wave_c.direction,
-                    'points': latest_pattern.wave_c.points,
-                    'bars': latest_pattern.wave_c.bars
-                },
-                'pattern_type': latest_pattern.pattern_type,
-                'is_complete': latest_pattern.is_complete,
-                'fibonacci_confluence': latest_pattern.fibonacci_confluence,
-                # Add projection levels for incomplete patterns
-                'fe62_target': getattr(latest_pattern, 'fe62_target', None),
-                'fe100_target': getattr(latest_pattern, 'fe100_target', None),
-                'fe127_target': getattr(latest_pattern, 'fe127_target', None)
-            }
+                # Send new ABC pattern to frontend
+                results['new_abc_pattern'] = {
+                    'wave_a': {
+                        'start_timestamp': best_pattern.wave_a.start_timestamp.isoformat(),
+                        'end_timestamp': best_pattern.wave_a.end_timestamp.isoformat(),
+                        'start_price': best_pattern.wave_a.start_price,
+                        'end_price': best_pattern.wave_a.end_price,
+                        'direction': best_pattern.wave_a.direction,
+                        'points': best_pattern.wave_a.points,
+                        'bars': best_pattern.wave_a.bars
+                    },
+                    'wave_b': {
+                        'start_timestamp': best_pattern.wave_b.start_timestamp.isoformat(),
+                        'end_timestamp': best_pattern.wave_b.end_timestamp.isoformat(),
+                        'start_price': best_pattern.wave_b.start_price,
+                        'end_price': best_pattern.wave_b.end_price,
+                        'direction': best_pattern.wave_b.direction,
+                        'points': best_pattern.wave_b.points,
+                        'bars': best_pattern.wave_b.bars
+                    },
+                    'wave_c': {
+                        'start_timestamp': best_pattern.wave_c.start_timestamp.isoformat(),
+                        'end_timestamp': best_pattern.wave_c.end_timestamp.isoformat(),
+                        'start_price': best_pattern.wave_c.start_price,
+                        'end_price': best_pattern.wave_c.end_price,
+                        'direction': best_pattern.wave_c.direction,
+                        'points': best_pattern.wave_c.points,
+                        'bars': best_pattern.wave_c.bars
+                    },
+                    'pattern_type': best_pattern.pattern_type,
+                    'is_complete': best_pattern.is_complete,
+                    'fibonacci_confluence': best_pattern.fibonacci_confluence,
+                    # Add projection levels for incomplete patterns
+                    'fe62_target': getattr(best_pattern, 'fe62_target', None),
+                    'fe100_target': getattr(best_pattern, 'fe100_target', None),
+                    'fe127_target': getattr(best_pattern, 'fe127_target', None)
+                }
+            else:
+                results['new_abc_pattern'] = None
         else:
             results['new_abc_pattern'] = None
 
@@ -1069,13 +1081,13 @@ class FibonacciStrategy:
         """
         Detect ABC correction patterns within the dominant swing structure.
         
-        Improved Logic:
+        🚨 FIXED: Clean Single Pattern Detection Logic
         1. Only look for ABC patterns when we have a dominant swing (main trend)
         2. Find ABC corrections that are retracements/pullbacks within that dominant swing
         3. Wave A starts from dominant swing and moves against the trend
-        4. Wave B retraces 38.2%-61.8% of Wave A
+        4. Wave B retraces 38.2%-61.8% of Wave A  
         5. Wave C continues in Wave A direction (completing the correction)
-        6. Entire ABC pattern should fit within dominant swing timeframe
+        6. Return only the MOST RECENT/RELEVANT ABC pattern to avoid overlapping patterns
         """
         abc_patterns = []
         
@@ -1083,7 +1095,7 @@ class FibonacciStrategy:
         if not self.current_dominant_swing:
             return abc_patterns
         
-        if len(self.fractals) < 3:
+        if len(self.fractals) < 4:  # Need at least 4 fractals for a complete ABC
             return abc_patterns
         
         # Get fractals that occur within the dominant swing timeframe
@@ -1094,33 +1106,61 @@ class FibonacciStrategy:
         swing_fractals = [f for f in self.fractals 
                          if swing_start_index <= f.bar_index <= current_index]
         
-        if len(swing_fractals) < 3:
+        if len(swing_fractals) < 4:  # Need at least 4 fractals for complete ABC
             return abc_patterns
         
+        # 🚨 CRITICAL FIX: Find only the MOST RECENT complete ABC pattern
+        # Look backwards from the most recent fractals to find the latest complete pattern
+        best_pattern = None
+        best_pattern_score = 0
+        
         # Look for ABC corrections within the dominant swing
-        # ABC should represent a counter-trend correction within the main trend
-        for i in range(len(swing_fractals) - 2):
+        # Start from the most recent possible pattern and work backwards
+        for i in range(len(swing_fractals) - 4, -1, -1):  # Need 4 fractals, so stop at len-4
+            if i + 3 >= len(swing_fractals):  # Safety check
+                continue
+                
             fractal_a = swing_fractals[i]      # Start of correction (from dominant swing)
             fractal_b = swing_fractals[i + 1]  # Peak of correction counter-move
             fractal_c = swing_fractals[i + 2]  # End of Wave B, start of Wave C
+            fractal_c_end = swing_fractals[i + 3]  # End of Wave C (completion fractal)
             
             # Current price for Wave C completion check
             current_price = df.iloc[current_index]['close']
             current_timestamp = df.index[current_index]
             
-            abc_pattern = self._validate_abc_pattern_within_swing(
-                fractal_a, fractal_b, fractal_c, 
+            abc_pattern = self._validate_complete_abc_pattern(
+                fractal_a, fractal_b, fractal_c, fractal_c_end, 
                 current_price, current_timestamp, current_index
             )
             
             if abc_pattern:
-                abc_patterns.append(abc_pattern)
+                # Score pattern based on quality criteria
+                pattern_score = self._score_abc_pattern(abc_pattern)
+                
+                if pattern_score > best_pattern_score:
+                    best_pattern = abc_pattern
+                    best_pattern_score = pattern_score
+                
+                # If we found a high-quality recent pattern, prefer it
+                if pattern_score >= 0.8:  # High quality threshold
+                    break
+        
+        # Return only the best pattern found
+        if best_pattern:
+            abc_patterns.append(best_pattern)
+            logger.debug(f"🌊 BEST ABC Pattern selected: {best_pattern.pattern_type} with score {best_pattern_score:.2f}")
         
         return abc_patterns
 
-    def _validate_abc_pattern_within_swing(self, fractal_a: Fractal, fractal_b: Fractal, fractal_c: Fractal,
-                            current_price: float, current_timestamp: pd.Timestamp, current_index: int) -> Optional[ABCPattern]:
-        """Validate if three fractals form a valid ABC correction pattern within the dominant swing structure."""
+    def _validate_complete_abc_pattern(self, fractal_a: Fractal, fractal_b: Fractal, fractal_c: Fractal, 
+                                     fractal_c_end: Fractal, current_price: float, current_timestamp: pd.Timestamp, 
+                                     current_index: int) -> Optional[ABCPattern]:
+        """
+        Validate if four fractals form a complete ABC correction pattern.
+        
+        🚨 FIXED: Only returns complete patterns that have ended at a fractal point.
+        """
         
         # Step 1: Create Wave A
         wave_a = ABCWave(
@@ -1146,34 +1186,7 @@ class FibonacciStrategy:
             bars=fractal_c.bar_index - fractal_b.bar_index
         )
         
-        # Step 3: CRITICAL - Wave A must move AGAINST the dominant swing direction (correction)
-        dominant_swing_direction = self.current_dominant_swing.direction
-        if wave_a.direction == dominant_swing_direction:
-            return None  # Wave A should be a correction, not continuation
-        
-        # Step 4: Validate Wave B retracement (must be 38.2%-61.8% of Wave A)
-        wave_b_retracement = wave_b.points / wave_a.points
-        if not (0.382 <= wave_b_retracement <= 0.618):
-            return None
-        
-        # Step 5: Wave B must move opposite to Wave A (correction of the correction)
-        if wave_a.direction == wave_b.direction:
-            return None
-        
-        # Step 6: ✅ FIXED - Only detect COMPLETE ABC patterns between fractals
-        # Look for next fractal after fractal_c to complete Wave C
-        next_fractals = [f for f in self.fractals if f.bar_index > fractal_c.bar_index]
-        
-        if not next_fractals:
-            # No complete Wave C yet - return incomplete pattern with projections
-            return self._create_incomplete_abc_with_projections(
-                wave_a, wave_b, fractal_c, current_price, current_timestamp
-            )
-        
-        # Find the next fractal that could complete Wave C
-        fractal_c_end = next_fractals[0]
-        
-        # Create Wave C between fractals (not to current price)
+        # Step 3: Create Wave C (complete pattern using fractal_c_end)
         wave_c = ABCWave(
             start_timestamp=fractal_c.timestamp,
             end_timestamp=fractal_c_end.timestamp,
@@ -1184,6 +1197,20 @@ class FibonacciStrategy:
             points=abs(fractal_c_end.price - fractal_c.price),
             bars=fractal_c_end.bar_index - fractal_c.bar_index
         )
+        
+        # Step 4: CRITICAL - Wave A must move AGAINST the dominant swing direction (correction)
+        dominant_swing_direction = self.current_dominant_swing.direction
+        if wave_a.direction == dominant_swing_direction:
+            return None  # Wave A should be a correction, not continuation
+        
+        # Step 5: Validate Wave B retracement (must be 38.2%-61.8% of Wave A)
+        wave_b_retracement = wave_b.points / wave_a.points
+        if not (0.382 <= wave_b_retracement <= 0.618):
+            return None
+        
+        # Step 6: Wave B must move opposite to Wave A (correction of the correction)
+        if wave_a.direction == wave_b.direction:
+            return None
         
         # Step 7: Wave C must move same direction as Wave A (continuation of correction)
         if wave_a.direction != wave_c.direction:
@@ -1196,7 +1223,11 @@ class FibonacciStrategy:
         
         is_complete = any(abs(wave_c_ratio - ratio) <= tolerance for ratio in valid_ratios)
         
-        # Step 9: Determine pattern type
+        # Only return patterns that are complete and meet Fibonacci criteria
+        if not is_complete:
+            return None
+        
+        # Step 9: Determine pattern type based on structure
         pattern_type = 'zigzag'  # Default to zigzag for now
         
         # Step 10: Check for Fibonacci confluence
@@ -1213,7 +1244,7 @@ class FibonacciStrategy:
             wave_b=wave_b, 
             wave_c=wave_c,
             pattern_type=pattern_type,
-            is_complete=is_complete,
+            is_complete=True,  # Always complete in this method
             fibonacci_confluence=fibonacci_confluence
         )
     
@@ -1265,6 +1296,48 @@ class FibonacciStrategy:
         pattern.fe127_target = fe127_target
         
         return pattern
+    
+    def _score_abc_pattern(self, pattern: ABCPattern) -> float:
+        """
+        Score ABC pattern based on quality criteria.
+        
+        Returns score between 0.0 and 1.0, where higher is better.
+        """
+        score = 0.0
+        
+        # Base score for complete patterns
+        if pattern.is_complete:
+            score += 0.3
+        
+        # Score based on Wave B retracement quality
+        wave_b_retracement = pattern.wave_b.points / pattern.wave_a.points
+        if 0.50 <= wave_b_retracement <= 0.618:  # Ideal retracement range
+            score += 0.3
+        elif 0.382 <= wave_b_retracement <= 0.50:  # Acceptable range
+            score += 0.2
+        
+        # Score based on Wave C Fibonacci extension quality
+        wave_c_ratio = pattern.wave_c.points / pattern.wave_a.points
+        
+        # Perfect Fibonacci ratios get highest score
+        if abs(wave_c_ratio - 1.0) <= 0.05:  # Perfect 100% extension
+            score += 0.3
+        elif abs(wave_c_ratio - 0.618) <= 0.05:  # Perfect 62% extension
+            score += 0.25
+        elif abs(wave_c_ratio - 1.27) <= 0.05:  # Perfect 127% extension
+            score += 0.25
+        elif abs(wave_c_ratio - 1.0) <= 0.1:  # Close to 100%
+            score += 0.2
+        elif abs(wave_c_ratio - 0.618) <= 0.1:  # Close to 62%
+            score += 0.15
+        elif abs(wave_c_ratio - 1.27) <= 0.1:  # Close to 127%
+            score += 0.15
+        
+        # Bonus for Fibonacci confluence
+        if pattern.fibonacci_confluence:
+            score += 0.1
+        
+        return min(score, 1.0)  # Cap at 1.0
     
     def get_current_state(self) -> Dict:
         """Get current strategy state for dashboard display."""
