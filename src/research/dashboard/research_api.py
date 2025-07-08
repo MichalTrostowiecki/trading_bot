@@ -20,6 +20,7 @@ from src.data.importers import MT4DataImporter, MT5DataImporter
 from src.monitoring import get_logger
 from src.strategy.backtesting_engine import BacktestingEngine
 from sqlalchemy import text
+import uvicorn
 
 logger = get_logger("research_api")
 
@@ -6258,7 +6259,7 @@ async def get_available_symbols():
     try:
         # Query database for distinct symbols
         with db_manager.get_session() as session:
-            from sqlalchemy import text
+            # Using sqlalchemy import from top of file
             
             # Get distinct symbols and their available timeframes
             result = session.execute(text("""
@@ -6314,7 +6315,7 @@ async def get_available_date_ranges():
             raise HTTPException(status_code=500, detail="Database not available")
             
         with db_manager.get_session() as session:
-            from sqlalchemy import text
+            # Using sqlalchemy import from top of file
             
             # Get date ranges for each symbol/timeframe combination
             result = session.execute(text("""
@@ -7056,7 +7057,7 @@ async def get_supply_demand_zones(
                 })
 
             # Convert to DataFrame for zone detection
-            import pandas as pd
+            # Using pandas import from top of file
             df = pd.DataFrame([{
                 'timestamp': row[0],
                 'open': float(row[1]),
@@ -7191,5 +7192,4 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)
