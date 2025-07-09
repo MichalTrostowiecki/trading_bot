@@ -5,6 +5,98 @@ All notable changes to the Fibonacci Trading Bot project will be documented in t
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0] - 2025-07-07
+
+### Added
+- **Enhanced Signal Generation System**: Complete pattern confirmation system at Fibonacci levels
+  - Bar pattern recognition (bullish/bearish engulfing, hammer, pin bar)
+  - Confluence-based quality scoring (0-100 points) with fibonacci, pattern, volume, and swing factors
+  - Signal classification system (Weak/Moderate/Strong) with automatic filtering
+  - Real-time enhanced signal visualization with distinctive markers and horizontal lines
+
+- **Signal Performance Analytics System**: Comprehensive tracking and ML preparation
+  - Real-time performance monitoring for all enhanced signals
+  - Outcome tracking (target hit, stop hit, timeout) with bars-to-resolution metrics
+  - Quality breakdown analysis by signal strength levels
+  - Pattern performance statistics with win rates and confidence scores
+  - Confluence score analysis across performance ranges (0-40, 40-60, 60-80, 80-100)
+  - ML-ready feature extraction and dataset export capabilities
+
+- **Analytics Dashboard Panel**: Professional performance tracking interface
+  - Real-time statistics display (active/completed signals, win rate, average bars to resolution)
+  - Comprehensive analytics with quality breakdown and pattern rankings
+  - ML readiness indicators and feature count tracking
+  - Export capabilities for CSV data and performance analysis
+
+- **New API Endpoints**: Dedicated signal performance analytics
+  - `GET /api/signals/analytics` - Comprehensive analytics for ML/AI development
+  - `GET /api/signals/performance/export` - Export performance data for external analysis
+  - `GET /api/signals/performance/real-time` - Real-time performance statistics
+
+### Enhanced
+- **FibonacciStrategy Integration**: Enhanced signals automatically tracked from generation to completion
+- **Research Dashboard**: Added Signal Analytics panel with real-time updates during chart replay
+- **Strategy Processing**: Real-time signal performance updates integrated into bar processing
+- **Documentation**: Comprehensive updates across all architecture and user guide documents
+
+### Technical Implementation
+- **SignalPerformanceTracker**: Core tracking class with comprehensive performance metrics
+- **EnhancedSignalGenerator**: Pattern confirmation system with quality assessment
+- **Real-time Integration**: Automatic performance tracking in strategy execution
+- **ML Preparation**: Feature engineering and dataset export ready for machine learning models
+
+## [2.8.0] - 2025-07-06
+
+### Added
+- **Supply & Demand Zone Visualization**: Complete zone management system with price line boundaries
+- SupplyDemandZoneManager JavaScript class for TradingView integration
+- Zone loading and management with professional styling (red/green zone type colors)
+- Strength-based visual hierarchy with dynamic opacity
+- UI controls integration with toggle checkbox and zone filtering functions
+- Connection to existing Supply & Demand API endpoints
+
+### Fixed
+- Multiple zone visualization attempts to achieve proper rectangular zones:
+  - Replaced problematic histogram series (created vertical bars)
+  - Replaced area series approach (created vertical walls)
+  - Implemented simplified price line boundaries for zone top/bottom
+- Zone management system with proper line removal and cleanup
+- Updated filter methods to handle TradingView price line limitations
+
+### Technical Challenge Identified
+- **TradingView Lightweight Charts Limitation**: Free version lacks native rectangle support
+- Current implementation shows functional zone boundaries but lacks filled rectangular areas
+- Future enhancement: Drawing primitives plugin for proper rectangle visualization
+
+### Documentation
+- Updated CLAUDE.md with current session progress and S&D zone status
+- Enhanced README.md with project status and testing framework information
+- Updated task tracker with partial S&D zone completion status
+
+## [2.7.0] - 2025-07-05
+
+### Added
+- **ABC Correction Pattern System**: Complete Elliott Wave compliant ABC pattern detection and visualization
+- Elliott Wave theory validation with strict pattern rules (Wave B: 38.2%-61.8% retracement, Wave C: 61.8%/100%/161.8% completion)
+- Dominant swing context detection - ABC patterns only appear within established dominant swings
+- Professional dotted line visualization (Red: Wave A, Teal: Wave B, Blue: Wave C)
+- Real-time ABC pattern count in debug panel with live updates
+- ABC patterns toggle checkbox in settings panel
+- Pattern boundary validation ensuring corrections stay within swing limits
+- Fibonacci confluence detection at ABC completion points
+
+### Fixed
+- Duplicate JavaScript class declarations causing "identifier already declared" errors
+- ABC checkbox ID conflicts and method name mismatches
+- JavaScript UI integration issues preventing pattern display
+- Visual feedback improvements for ABC pattern detection
+
+### Technical
+- ABCWave and ABCPattern dataclasses for structured pattern representation
+- Enhanced fibonacci_strategy.py with detect_abc_patterns() and validation methods
+- ABCPatternManager class for TradingView chart integration
+- Comprehensive documentation updates across user guides and architecture specs
+
 ## [2.6.0] - 2025-07-01
 
 ### Added

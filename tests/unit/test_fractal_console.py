@@ -51,11 +51,12 @@ def test_fractal_detection():
     
     # Initialize strategy
     try:
-        strategy = FibonacciStrategy({
-            'fractal_period': 5,
-            'min_swing_size': 50,
-            'fibonacci_levels': [23.6, 38.2, 50.0, 61.8, 78.6]
-        })
+        strategy = FibonacciStrategy(
+            fractal_period=5,
+            min_swing_points=0.0050,  # 50 pips
+            fibonacci_levels=[0.236, 0.382, 0.500, 0.618, 0.786],
+            lookback_candles=100
+        )
         print("✅ Strategy initialized")
         
     except Exception as e:
@@ -68,19 +69,9 @@ def test_fractal_detection():
     print("Bar | Time                | Price    | Fractal Type")
     print("-" * 55)
     
-    for i, (timestamp, row) in enumerate(df.iterrows()):
-        # Create bar data
-        bar_data = {
-            'timestamp': timestamp,
-            'open': row['open'],
-            'high': row['high'], 
-            'low': row['low'],
-            'close': row['close'],
-            'volume': row['volume']
-        }
-        
-        # Process bar
-        strategy.process_bar(bar_data, i)
+    for i in range(len(df)):
+        # Process bar with DataFrame (not dictionary)
+        strategy.process_bar(df, i)
         
         # Get current state
         state = strategy.get_current_state()

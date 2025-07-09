@@ -146,6 +146,7 @@ Create research dashboard at http://localhost:8001:
    - Fractals with proper symbols (▲ for lows, ▼ for highs)
    - Swing highs/lows with directional arrows
    - Fibonacci levels (23.6%, 38.2%, 50%, 61.8%, 78.6%)
+   - ABC correction patterns with dotted wave lines
    - Entry/exit signals with labels
    - Stop loss/take profit lines
 
@@ -422,7 +423,20 @@ trading_bot/
 - **Data Range**: DJ30 M1 (219k bars), EURUSD H1 (98 bars)
 - **Query Performance**: Optimized for real-time backtesting
 
-#### 5. **Technical Achievements** - COMPLETED
+#### 5. **Enhanced Signal Generation** - FULLY OPERATIONAL
+- **Pattern Confirmation**: Bar pattern recognition at Fibonacci levels (bullish/bearish engulfing, hammer, pin bar)
+- **Quality Scoring**: Confluence-based scoring system (0-100 points) with fibonacci, pattern, volume, and swing factors
+- **Signal Classification**: Weak/Moderate/Strong quality assessment with automatic filtering
+- **Dashboard Integration**: Real-time enhanced signal visualization with distinctive markers
+
+#### 6. **Signal Performance Analytics** - FULLY OPERATIONAL  
+- **Real-time Tracking**: Automatic performance monitoring for all enhanced signals
+- **Outcome Analysis**: Target hit, stop hit, timeout tracking with bars-to-resolution metrics
+- **Quality Assessment**: Performance breakdown by signal quality (weak/moderate/strong)
+- **Pattern Statistics**: Win rate analysis by pattern type and strength
+- **ML Preparation**: Feature extraction and export capabilities for machine learning models
+
+#### 7. **Technical Achievements** - COMPLETED
 - **Position Synchronization**: Fixed critical timestamp mismatch issues
 - **Performance Optimization**: Request throttling, stale response filtering
 - **Error Handling**: Resource exhaustion prevention, robust error recovery
@@ -442,6 +456,8 @@ trading_bot/
 The system now provides:
 - **Stable fractal visualization** with correct timing and positioning
 - **Real-time strategy analysis** with live fractal detection during navigation
+- **Enhanced signal generation** with pattern confirmation and quality scoring
+- **Comprehensive performance analytics** with ML-ready data export
 - **Professional-grade charting** following TradingView best practices
 - **Robust error handling** with comprehensive debugging capabilities
 - **Scalable architecture** ready for additional strategy components
@@ -449,11 +465,12 @@ The system now provides:
 ### 🔄 Next Implementation Phase
 
 #### Immediate Priorities:
-1. **Swing Detection Visualization**: Add swing line display between fractals
-2. **Fibonacci Level Display**: Show retracement levels on chart
-3. **Signal Generation**: Implement entry/exit signal detection and display
-4. **Performance Analytics**: Add real-time strategy statistics
-5. **ML Data Export**: Prepare fractal/swing data for machine learning
+1. ~~**Enhanced Signal Generation**: Implement pattern confirmation at Fibonacci levels~~ ✅ COMPLETED
+2. ~~**Signal Performance Analytics**: Real-time tracking and ML-ready export~~ ✅ COMPLETED
+3. **Signal Filtering by Quality**: Implement quality threshold filtering for signals
+4. **Pattern Performance Statistics**: Deep analysis of which patterns perform best
+5. **Signal Comparison Dashboard**: Compare traditional vs enhanced signal performance
+6. **ML Feature Engineering**: Advanced feature extraction for machine learning models
 
 #### Technical Debt:
 - Optimize fractal detection algorithm for larger datasets
@@ -461,7 +478,86 @@ The system now provides:
 - Implement historical fractal pattern analysis
 - Add automated testing for fractal detection accuracy
 
-The visual backtesting system is now production-ready for fractal analysis and serves as a solid foundation for advanced strategy development and machine learning integration.
+## Signal Performance Analytics System
+
+### Overview
+The system now includes comprehensive signal performance tracking and analytics designed for ML/AI development. All enhanced signals are automatically tracked from generation to completion, providing detailed performance metrics and exportable datasets.
+
+### Core Components
+
+#### 1. **SignalPerformanceTracker Class**
+```python
+# src/analysis/signal_performance.py
+class SignalPerformanceTracker:
+    def track_new_signal(self, enhanced_signal: Dict[str, Any]) -> str
+    def update_signal_performance(self, signal_id: str, current_price: float, current_time: datetime, bars_elapsed: int)
+    def get_signal_analytics(self) -> Dict[str, Any]
+    def export_performance_data(self) -> pd.DataFrame
+```
+
+#### 2. **Performance Tracking Features**
+- **Real-time Monitoring**: Tracks price movement relative to stop loss and take profit
+- **Outcome Classification**: Target hit, stop hit, timeout with bars-to-resolution metrics
+- **Time-based Performance**: 1-hour, 4-hour, 24-hour performance snapshots
+- **Quality Metrics**: Signal efficiency, drawdown ratio, maximum favorable/adverse moves
+
+#### 3. **Analytics Dashboard Panel**
+- **Real-time Stats**: Active signals, completed signals, win rate, average bars to resolution
+- **Quality Breakdown**: Performance analysis by signal quality (weak/moderate/strong)
+- **Pattern Rankings**: Top-performing patterns with win rates and confidence scores
+- **Confluence Analysis**: Performance by confluence score ranges (0-40, 40-60, 60-80, 80-100)
+- **ML Readiness**: Feature count and readiness indicators
+
+#### 4. **API Endpoints**
+```
+GET /api/signals/analytics - Comprehensive analytics for ML/AI development
+GET /api/signals/performance/export - Export performance data for analysis
+GET /api/signals/performance/real-time - Real-time statistics
+```
+
+#### 5. **Data Export Capabilities**
+- **CSV Export**: Complete signal performance datasets
+- **ML Features**: Pre-engineered features for machine learning models
+- **Pattern Statistics**: Aggregated performance by pattern type and strength
+- **Confluence Scoring**: Detailed scoring breakdown for optimization
+
+### Integration Points
+
+#### Strategy Integration
+```python
+# Enhanced signals automatically tracked in FibonacciStrategy.check_fibonacci_hits()
+enhanced_signal = self.enhanced_signal_generator.generate_enhanced_signal(...)
+if enhanced_signal:
+    signal_dict = {...}  # Convert to tracking format
+    signal_id = self.signal_performance_tracker.track_new_signal(signal_dict)
+```
+
+#### Real-time Updates
+```python
+# Performance updated every bar in FibonacciStrategy.process_bar()
+self.update_signal_performance_tracking(df, current_index)
+results['signal_performance'] = self.signal_performance_tracker.get_real_time_stats()
+```
+
+### ML/AI Preparation
+
+#### Feature Engineering
+The system extracts ML-ready features including:
+- **Fibonacci level encoding**: Level as percentage (0.382, 0.618, etc.)
+- **Pattern encoding**: Hash-based pattern type encoding
+- **Quality scoring**: Numerical quality and strength ratings
+- **Confluence factors**: Individual factor scores and combinations
+- **Outcome labeling**: Binary win/loss labels for supervised learning
+
+#### Dataset Export
+```python
+# Export complete dataset for ML training
+performance_df = strategy.export_signal_performance_data()
+analytics = strategy.get_signal_analytics()
+ml_features = analytics['ml_features']
+```
+
+The visual backtesting system is now production-ready for comprehensive signal analysis and serves as a robust foundation for advanced strategy development and machine learning integration.
 
 ## Legacy Planning - Next Steps
 ~~1. Set up database schema extensions~~ ✅ COMPLETED

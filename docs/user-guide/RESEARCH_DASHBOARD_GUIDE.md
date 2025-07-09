@@ -98,6 +98,7 @@ python3 test_backtesting_db.py
    - Toggle fractals display
    - Toggle swings display
    - Toggle Fibonacci levels
+   - Toggle ABC patterns display
    - Toggle signals display
 
 ## 🔌 API Endpoints
@@ -132,6 +133,121 @@ curl -X POST http://localhost:8001/api/backtest \
 # Get fractals
 curl "http://localhost:8001/api/fractals?symbol=EURUSD&timeframe=H1&start_date=2024-01-01&end_date=2024-01-02"
 ```
+
+## 🌊 ABC Pattern Analysis
+
+### Overview
+The dashboard includes Elliott Wave compliant ABC correction pattern detection, providing professional market structure analysis within dominant swing contexts.
+
+### ABC Pattern Features
+- **Elliott Wave Compliance**: Follows professional Elliott Wave theory rules
+- **Dominant Swing Context**: ABC patterns only detected within established dominant swings
+- **Real-time Detection**: Live pattern identification during chart replay
+- **Visual Feedback**: Dotted line visualization showing wave connections
+- **Pattern Validation**: Strict validation rules ensuring high-quality patterns
+
+### ABC Pattern Rules
+1. **Wave A**: Must move AGAINST the dominant swing direction (correction start)
+2. **Wave B**: Retraces 38.2%-61.8% of Wave A (Elliott Wave standard)
+3. **Wave C**: Continues Wave A direction, completing the correction
+4. **Boundary Validation**: Pattern must stay within dominant swing bounds
+5. **Completion Ratios**: Wave C targets 61.8%, 100%, or 161.8% of Wave A
+
+### Visual Elements
+- **Red Dotted Line**: Wave A (correction against trend)
+- **Teal Dotted Line**: Wave B (retracement of correction)
+- **Blue Dotted Line**: Wave C (completion of correction)
+- **Pattern Labels**: A, B, C markers at wave endpoints
+- **Debug Counter**: Real-time pattern count in debug panel
+
+### Controls
+- **ABC Checkbox**: Toggle ABC pattern visibility in settings panel
+- **Real-time Updates**: Patterns appear immediately when detected
+- **Chart Integration**: Works alongside fractals, swings, and Fibonacci levels
+
+### Usage
+1. Enable ABC patterns checkbox in settings panel
+2. Navigate through chart replay to see patterns develop
+3. Monitor debug panel for pattern count updates
+4. Observe dotted lines showing wave structure
+5. Use patterns for confluence analysis with Fibonacci levels
+
+## 🎯 Enhanced Signal Generation & Performance Analytics
+
+### Overview
+The dashboard includes a comprehensive enhanced signal generation system with real-time performance tracking and analytics designed for ML/AI development. All enhanced signals are automatically tracked from generation to completion.
+
+### Enhanced Signal Features
+- **Pattern Confirmation**: Bar pattern recognition at Fibonacci levels (bullish/bearish engulfing, hammer, pin bar)
+- **Quality Scoring**: Confluence-based scoring system (0-100 points) with fibonacci, pattern, volume, and swing factors
+- **Signal Classification**: Weak/Moderate/Strong quality assessment with automatic filtering
+- **Real-time Visualization**: Distinctive markers and horizontal lines showing entry, stop loss, and take profit levels
+
+### Signal Performance Analytics Panel
+Located in the sidebar, this panel provides comprehensive performance tracking:
+
+#### Real-time Statistics
+- **Active Signals**: Currently tracking signals awaiting resolution
+- **Completed Signals**: Total signals that reached target or stop loss
+- **Win Rate**: Percentage of signals that hit take profit vs stop loss
+- **Average Bars**: Average time to resolution in bars
+
+#### Performance Controls
+- **Refresh Analytics**: Update comprehensive analytics data
+- **Export Performance**: Download complete performance data as CSV
+
+### Signal Analytics Dashboard
+Detailed analytics include:
+
+#### Overall Performance
+- Total signals generated
+- Overall win rate across all signals
+- Active vs completed signal counts
+
+#### Quality Breakdown
+Performance analysis by signal quality levels:
+- **Weak Signals** (0-40%): Lower confluence scores, typically filtered out
+- **Moderate Signals** (40-70%): Acceptable quality with reasonable win rates
+- **Strong Signals** (70-100%): High-quality signals with excellent performance
+
+#### Pattern Rankings
+Top-performing patterns with:
+- Win rates by pattern type and strength
+- Average P&L per pattern
+- Confluence score averages
+- Total signal counts for statistical significance
+
+#### Confluence Score Analysis
+Performance breakdown by score ranges:
+- **0-40**: Low-quality signals with poor performance
+- **40-60**: Moderate quality with improving win rates
+- **60-80**: Good quality with strong performance
+- **80-100**: Excellent quality with highest win rates
+
+#### ML Readiness Indicators
+- Feature count available for ML training
+- Dataset size and quality metrics
+- Readiness status for machine learning models
+
+### API Integration
+The signal performance system provides dedicated endpoints:
+
+- **GET /api/signals/analytics**: Comprehensive analytics for ML/AI development
+- **GET /api/signals/performance/export**: Export performance data for analysis
+- **GET /api/signals/performance/real-time**: Real-time statistics
+
+### Data Export Capabilities
+- **CSV Export**: Complete signal performance datasets with all metrics
+- **ML Features**: Pre-engineered features ready for machine learning models
+- **Pattern Statistics**: Aggregated performance by pattern type and strength
+- **Performance Tracking**: Individual signal journeys from entry to exit
+
+### Integration with Strategy
+The enhanced signal system is fully integrated with the existing Fibonacci strategy:
+- Automatic signal tracking when enhanced signals are generated
+- Real-time performance updates during chart replay
+- Quality-based filtering to improve signal selection
+- Comprehensive analytics for strategy optimization
 
 ## 📈 Data Import
 
@@ -200,6 +316,7 @@ Backtest Runs API    ✅ PASS
 - **Real-time Fractals**: Live fractal detection and display
 - **Swing Analysis**: Advanced swing pattern recognition
 - **Fibonacci Visualization**: Interactive Fibonacci level drawing
+- **ABC Pattern Detection**: Elliott Wave compliant ABC correction patterns
 - **Signal Optimization**: ML-enhanced signal generation
 
 ## 📁 File Structure
